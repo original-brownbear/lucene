@@ -51,10 +51,12 @@ public abstract class BufferedIndexInput extends IndexInput implements RandomAcc
 
   @Override
   public final byte readByte() throws IOException {
-    if (buffer.hasRemaining() == false) {
+    ByteBuffer b = buffer;
+    if (b.hasRemaining() == false) {
       refill();
+      b = buffer;
     }
-    return buffer.get();
+    return b.get();
   }
 
   public BufferedIndexInput(String resourceDesc) {
@@ -110,8 +112,7 @@ public abstract class BufferedIndexInput extends IndexInput implements RandomAcc
         refill();
         if (buffer.remaining() < len) {
           // Throw an exception when refill() could not read len bytes:
-          buffer.get(b, offset, buffer.remaining());
-          throw new EOFException("read past EOF: " + this);
+          throwReadPastEOF();
         } else {
           buffer.get(b, offset, len);
         }
@@ -123,8 +124,8 @@ public abstract class BufferedIndexInput extends IndexInput implements RandomAcc
         // this function, there is no need to do a seek
         // here, because there's no need to reread what we
         // had in the buffer.
-        long after = bufferStart + buffer.position() + len;
-        if (after > length()) throw new EOFException("read past EOF: " + this);
+        long after = getFilePointer() + len;
+        if (after > length()) throwReadPastEOF();
         readInternal(ByteBuffer.wrap(b, offset, len));
         bufferStart = after;
         buffer.limit(0); // trigger refill() on read
@@ -134,29 +135,29 @@ public abstract class BufferedIndexInput extends IndexInput implements RandomAcc
 
   @Override
   public final short readShort() throws IOException {
-    if (Short.BYTES <= buffer.remaining()) {
-      return buffer.getShort();
-    } else {
-      return super.readShort();
+    final ByteBuffer b = buffer;
+    if (Short.BYTES <= b.remaining()) {
+      return b.getShort();
     }
+    return super.readShort();
   }
 
   @Override
   public final int readInt() throws IOException {
-    if (Integer.BYTES <= buffer.remaining()) {
-      return buffer.getInt();
-    } else {
-      return super.readInt();
+    final ByteBuffer b = buffer;
+    if (Integer.BYTES <= b.remaining()) {
+      return b.getInt();
     }
+    return super.readInt();
   }
 
   @Override
   public final long readLong() throws IOException {
-    if (Long.BYTES <= buffer.remaining()) {
-      return buffer.getLong();
-    } else {
-      return super.readLong();
+    final ByteBuffer b = buffer;
+    if (Long.BYTES <= b.remaining()) {
+      return b.getLong();
     }
+    return super.readLong();
   }
 
   // Computes an offset into the current buffer from an absolute position to read
@@ -164,20 +165,18 @@ public abstract class BufferedIndexInput extends IndexInput implements RandomAcc
   // readjust the bufferStart and refill.
   private long resolvePositionInBuffer(long pos, int width) throws IOException {
     long index = pos - bufferStart;
-    if (index >= 0 && index <= buffer.limit() - width) {
-      return index;
-    }
-    if (index < 0) {
+    if (index >= 0) {
+      if (index <= buffer.limit() - width) {
+        return index;
+      }
+      // we're moving forwards, reset the buffer to start at pos
+      bufferStart = pos;
+    } else {
       // if we're moving backwards, then try and fill up the previous page rather than
       // starting again at the current pos, to avoid successive backwards reads reloading
       // the same data over and over again.  We also check that we can read `width`
       // bytes without going over the end of the buffer
-      bufferStart = Math.max(bufferStart - bufferSize, pos + width - bufferSize);
-      bufferStart = Math.max(bufferStart, 0);
-      bufferStart = Math.min(bufferStart, pos);
-    } else {
-      // we're moving forwards, reset the buffer to start at pos
-      bufferStart = pos;
+      bufferStart = Math.min(Math.max(pos + Math.max(-index, width) - bufferSize, 0), pos);
     }
     buffer.limit(0); // trigger refill() on read
     seekInternal(bufferStart);
@@ -210,27 +209,42 @@ public abstract class BufferedIndexInput extends IndexInput implements RandomAcc
   }
 
   private void refill() throws IOException {
-    long start = bufferStart + buffer.position();
-    long end = start + bufferSize;
-    if (end > length()) // don't read past EOF
-    end = length();
+    long start = getFilePointer();
+    // don't read past EOF
+    final long end = Math.min(start + bufferSize, length());
     int newLength = (int) (end - start);
-    if (newLength <= 0) throw new EOFException("read past EOF: " + this);
+    if (newLength <= 0) throwReadPastEOF();
 
+    ByteBuffer b;
     if (buffer == EMPTY_BYTEBUFFER) {
-      buffer =
-          ByteBuffer.allocate(bufferSize).order(ByteOrder.LITTLE_ENDIAN); // allocate buffer lazily
-      seekInternal(bufferStart);
+      // allocate buffer lazily
+      b = initBuffer();
+    } else {
+      b = buffer;
     }
-    buffer.position(0);
-    buffer.limit(newLength);
     bufferStart = start;
-    readInternal(buffer);
+    readInternal(b.position(0).limit(newLength));
     // Make sure sub classes don't mess up with the buffer.
+    assert assertBufferAfterRead(newLength);
+    b.flip();
+  }
+
+  private ByteBuffer initBuffer() throws IOException {
+    ByteBuffer b = ByteBuffer.allocate(bufferSize).order(ByteOrder.LITTLE_ENDIAN);
+    buffer = b;
+    seekInternal(bufferStart);
+    return b;
+  }
+
+  protected void throwReadPastEOF() throws EOFException {
+    throw new EOFException("read past EOF: " + this);
+  }
+
+  private boolean assertBufferAfterRead(int newLength) {
     assert buffer.order() == ByteOrder.LITTLE_ENDIAN : buffer.order();
     assert buffer.remaining() == 0 : "should have thrown EOFException";
     assert buffer.position() == newLength;
-    buffer.flip();
+    return true;
   }
 
   /**

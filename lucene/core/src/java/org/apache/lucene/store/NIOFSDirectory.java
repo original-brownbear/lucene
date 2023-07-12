@@ -167,7 +167,7 @@ public class NIOFSDirectory extends FSDirectory {
       long pos = getFilePointer() + off;
 
       if (pos + b.remaining() > end) {
-        throw new EOFException("read past EOF: " + this);
+        throwReadPastEOF();
       }
 
       try {
@@ -204,9 +204,12 @@ public class NIOFSDirectory extends FSDirectory {
     @Override
     protected void seekInternal(long pos) throws IOException {
       if (pos > length()) {
-        throw new EOFException(
-            "read past EOF: pos=" + pos + " vs length=" + length() + ": " + this);
+        throwReadPastEofPosition(pos);
       }
+    }
+
+    private void throwReadPastEofPosition(long pos) throws EOFException {
+      throw new EOFException("read past EOF: pos=" + pos + " vs length=" + length() + ": " + this);
     }
   }
 }
