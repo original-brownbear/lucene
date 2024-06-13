@@ -65,8 +65,91 @@ public final class TaskExecutor {
    * @param <T> the return type of the task execution
    */
   public <T> List<T> invokeAll(Collection<Callable<T>> callables) throws IOException {
-    TaskGroup<T> taskGroup = new TaskGroup<>(callables);
-    return taskGroup.invokeAll(executor);
+    final int count = callables.size();
+    if (count == 1) {
+      final T res;
+      try {
+        res = callables.iterator().next().call();
+      } catch (Exception e) {
+        throw IOUtils.rethrowAlways(e);
+      }
+      return Collections.singletonList(res);
+    }
+    return invokeMultiple(callables, count);
+  }
+
+  private <T> List<T> invokeMultiple(Collection<Callable<T>> callables, int count)
+      throws IOException {
+    final AtomicInteger taskId = new AtomicInteger(0);
+    final List<RunnableFuture<T>> futures = new ArrayList<>(count);
+    for (Callable<T> callable : callables) {
+      AtomicBoolean startedOrCancelled = new AtomicBoolean(false);
+      futures.add(
+          new FutureTask<>(
+              () -> {
+                if (startedOrCancelled.compareAndSet(false, true)) {
+                  try {
+                    return callable.call();
+                  } catch (Throwable t) {
+                    for (Future<T> future : futures) {
+                      future.cancel(false);
+                    }
+                    throw t;
+                  }
+                }
+                // task is cancelled hence it has no results to return. That's fine: they would be
+                // ignored anyway.
+                return null;
+              }) {
+            @Override
+            public boolean cancel(boolean mayInterruptIfRunning) {
+              assert mayInterruptIfRunning == false
+                  : "cancelling tasks that are running is not supported";
+              /*
+              Future#get (called in invokeAll) throws CancellationException when invoked against a running task that has been cancelled but
+              leaves the task running. We rather want to make sure that invokeAll does not leave any running tasks behind when it returns.
+              Overriding cancel ensures that tasks that are already started will complete normally once cancelled, and Future#get will
+              wait for them to finish instead of throwing CancellationException. A cleaner way would have been to override FutureTask#get and
+              make it wait for cancelled tasks, but FutureTask#awaitDone is private. Tasks that are cancelled before they are started will be no-op.
+               */
+              return startedOrCancelled.compareAndSet(false, true);
+            }
+          });
+    }
+
+    if (count > 1) {
+      final Runnable work =
+          () -> {
+            int id = taskId.getAndIncrement();
+            if (id < count) {
+              futures.get(id).run();
+            }
+          };
+      for (int j = 0; j < count - 1; j++) {
+        executor.execute(work);
+      }
+    }
+    int id;
+    while ((id = taskId.getAndIncrement()) < count) {
+      futures.get(id).run();
+    }
+    Throwable exc = null;
+    List<T> results = new ArrayList<>(count);
+    for (int i = 0; i < count; i++) {
+      Future<T> future = futures.get(i);
+      try {
+        results.add(future.get());
+      } catch (InterruptedException e) {
+        exc = IOUtils.useOrSuppress(exc, new ThreadInterruptedException(e));
+      } catch (ExecutionException e) {
+        exc = IOUtils.useOrSuppress(exc, e.getCause());
+      }
+    }
+    assert assertAllFuturesCompleted(futures) : "Some tasks are still running?";
+    if (exc != null) {
+      throw IOUtils.rethrowAlways(exc);
+    }
+    return results;
   }
 
   @Override
@@ -74,107 +157,12 @@ public final class TaskExecutor {
     return "TaskExecutor(" + "executor=" + executor + ')';
   }
 
-  /**
-   * Holds all the sub-tasks that a certain operation gets split into as it gets parallelized and
-   * exposes the ability to invoke such tasks and wait for them all to complete their execution and
-   * provide their results. Additionally, if one task throws an exception, all other tasks from the
-   * same group are cancelled, to avoid needless computation as their results would not be exposed
-   * anyways. Creates one {@link FutureTask} for each {@link Callable} provided
-   *
-   * @param <T> the return type of all the callables
-   */
-  private static final class TaskGroup<T> {
-    private final List<RunnableFuture<T>> futures;
-    private final AtomicInteger taskId;
-
-    TaskGroup(Collection<Callable<T>> callables) {
-      List<RunnableFuture<T>> tasks = new ArrayList<>(callables.size());
-      for (Callable<T> callable : callables) {
-        tasks.add(createTask(callable));
-      }
-      this.futures = Collections.unmodifiableList(tasks);
-      this.taskId = new AtomicInteger(0);
-    }
-
-    RunnableFuture<T> createTask(Callable<T> callable) {
-      AtomicBoolean startedOrCancelled = new AtomicBoolean(false);
-      return new FutureTask<>(
-          () -> {
-            if (startedOrCancelled.compareAndSet(false, true)) {
-              try {
-                return callable.call();
-              } catch (Throwable t) {
-                cancelAll();
-                throw t;
-              }
-            }
-            // task is cancelled hence it has no results to return. That's fine: they would be
-            // ignored anyway.
-            return null;
-          }) {
-        @Override
-        public boolean cancel(boolean mayInterruptIfRunning) {
-          assert mayInterruptIfRunning == false
-              : "cancelling tasks that are running is not supported";
-          /*
-          Future#get (called in invokeAll) throws CancellationException when invoked against a running task that has been cancelled but
-          leaves the task running. We rather want to make sure that invokeAll does not leave any running tasks behind when it returns.
-          Overriding cancel ensures that tasks that are already started will complete normally once cancelled, and Future#get will
-          wait for them to finish instead of throwing CancellationException. A cleaner way would have been to override FutureTask#get and
-          make it wait for cancelled tasks, but FutureTask#awaitDone is private. Tasks that are cancelled before they are started will be no-op.
-           */
-          return startedOrCancelled.compareAndSet(false, true);
-        }
-      };
-    }
-
-    List<T> invokeAll(Executor executor) throws IOException {
-      final int count = futures.size();
-      for (int j = 0; j < count - 1; j++) {
-        executor.execute(
-            () -> {
-              int id = taskId.getAndIncrement();
-              if (id < count) {
-                futures.get(id).run();
-              }
-            });
-      }
-      int id;
-      while ((id = taskId.getAndIncrement()) < count) {
-        futures.get(id).run();
-      }
-      Throwable exc = null;
-      List<T> results = new ArrayList<>(count);
-      for (int i = 0; i < count; i++) {
-        Future<T> future = futures.get(i);
-        try {
-          results.add(future.get());
-        } catch (InterruptedException e) {
-          exc = IOUtils.useOrSuppress(exc, new ThreadInterruptedException(e));
-        } catch (ExecutionException e) {
-          exc = IOUtils.useOrSuppress(exc, e.getCause());
-        }
-      }
-      assert assertAllFuturesCompleted() : "Some tasks are still running?";
-      if (exc != null) {
-        throw IOUtils.rethrowAlways(exc);
-      }
-      return results;
-    }
-
-    private boolean assertAllFuturesCompleted() {
-      for (RunnableFuture<T> future : futures) {
-        if (future.isDone() == false) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    private void cancelAll() {
-      for (Future<T> future : futures) {
-        future.cancel(false);
+  private static <T> boolean assertAllFuturesCompleted(Collection<RunnableFuture<T>> futures) {
+    for (RunnableFuture<T> future : futures) {
+      if (future.isDone() == false) {
+        return false;
       }
     }
+    return true;
   }
 }
