@@ -117,17 +117,15 @@ public final class TaskExecutor {
           });
     }
 
-    if (count > 1) {
-      final Runnable work =
-          () -> {
-            int id = taskId.getAndIncrement();
-            if (id < count) {
-              futures.get(id).run();
-            }
-          };
-      for (int j = 0; j < count - 1; j++) {
-        executor.execute(work);
-      }
+    final Runnable work =
+        () -> {
+          int id = taskId.getAndIncrement();
+          if (id < count) {
+            futures.get(id).run();
+          }
+        };
+    for (int j = 0; j < count - 1; j++) {
+      executor.execute(work);
     }
     int id;
     while ((id = taskId.getAndIncrement()) < count) {
