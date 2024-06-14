@@ -80,7 +80,6 @@ public final class TaskExecutor {
 
   private <T> List<T> invokeMultiple(Collection<Callable<T>> callables, int count)
       throws IOException {
-    final AtomicInteger taskId = new AtomicInteger(0);
     final List<RunnableFuture<T>> futures = new ArrayList<>(count);
     for (Callable<T> callable : callables) {
       AtomicBoolean startedOrCancelled = new AtomicBoolean(false);
@@ -117,6 +116,7 @@ public final class TaskExecutor {
           });
     }
 
+    final AtomicInteger taskId = new AtomicInteger(0);
     final Runnable work =
         () -> {
           int id = taskId.getAndIncrement();
