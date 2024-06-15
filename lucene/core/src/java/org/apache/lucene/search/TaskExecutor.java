@@ -29,7 +29,6 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.RunnableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.ThreadInterruptedException;
@@ -82,36 +81,26 @@ public final class TaskExecutor {
       throws IOException {
     final List<RunnableFuture<T>> futures = new ArrayList<>(count);
     for (Callable<T> callable : callables) {
-      AtomicBoolean startedOrCancelled = new AtomicBoolean(false);
       futures.add(
-          new FutureTask<>(
-              () -> {
-                if (startedOrCancelled.compareAndSet(false, true)) {
-                  try {
-                    return callable.call();
-                  } catch (Throwable t) {
-                    for (Future<T> future : futures) {
-                      future.cancel(false);
-                    }
-                    throw t;
-                  }
-                }
-                // task is cancelled hence it has no results to return. That's fine: they would be
-                // ignored anyway.
-                return null;
-              }) {
+          new FutureTask<>(callable) {
+
+            @Override
+            protected void setException(Throwable t) {
+              super.setException(t);
+              for (Future<T> future : futures) {
+                future.cancel(false);
+              }
+            }
+
             @Override
             public boolean cancel(boolean mayInterruptIfRunning) {
               assert mayInterruptIfRunning == false
                   : "cancelling tasks that are running is not supported";
-              /*
-              Future#get (called in invokeAll) throws CancellationException when invoked against a running task that has been cancelled but
-              leaves the task running. We rather want to make sure that invokeAll does not leave any running tasks behind when it returns.
-              Overriding cancel ensures that tasks that are already started will complete normally once cancelled, and Future#get will
-              wait for them to finish instead of throwing CancellationException. A cleaner way would have been to override FutureTask#get and
-              make it wait for cancelled tasks, but FutureTask#awaitDone is private. Tasks that are cancelled before they are started will be no-op.
-               */
-              return startedOrCancelled.compareAndSet(false, true);
+              if (isDone()) {
+                return false;
+              }
+              set(null);
+              return true;
             }
           });
     }
@@ -119,9 +108,13 @@ public final class TaskExecutor {
     final AtomicInteger taskId = new AtomicInteger(0);
     final Runnable work =
         () -> {
-          int id = taskId.getAndIncrement();
-          if (id < count) {
+          int id;
+          while ((id = taskId.getAndIncrement()) < count) {
             futures.get(id).run();
+            if (id >= count - 1) {
+              // save redundant CAS in case this was the last task
+              break;
+            }
           }
         };
     for (int j = 0; j < count - 1; j++) {
@@ -130,6 +123,10 @@ public final class TaskExecutor {
     int id;
     while ((id = taskId.getAndIncrement()) < count) {
       futures.get(id).run();
+      if (id >= count - 1) {
+        // save redundant CAS in case this was the last task
+        break;
+      }
     }
     Throwable exc = null;
     List<T> results = new ArrayList<>(count);

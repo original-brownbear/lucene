@@ -293,12 +293,14 @@ public class TestTaskExecutor extends LuceneTestCase {
           expectThrows(RuntimeException.class, () -> taskExecutor.invokeAll(callables));
       Throwable[] suppressed = exc.getSuppressed();
 
-      assertEquals(1, suppressed.length);
-      if (exc.getMessage().equals("exception A")) {
-        assertEquals("exception B", suppressed[0].getMessage());
-      } else {
-        assertEquals("exception A", suppressed[0].getMessage());
-        assertEquals("exception B", exc.getMessage());
+      assertTrue(suppressed.length <= 1);
+      if (suppressed.length > 0) {
+        if (exc.getMessage().equals("exception A")) {
+          assertEquals("exception B", suppressed[0].getMessage());
+        } else {
+          assertEquals("exception A", suppressed[0].getMessage());
+          assertEquals("exception B", exc.getMessage());
+        }
       }
     } finally {
       TestUtil.shutdownExecutorService(multiThreadedExecutor);
