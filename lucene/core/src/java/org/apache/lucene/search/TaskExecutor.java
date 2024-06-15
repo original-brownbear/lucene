@@ -120,14 +120,7 @@ public final class TaskExecutor {
     for (int j = 0; j < forkCount; j++) {
       executorRef.execute(work);
     }
-    int id;
-    while ((id = taskId.getAndIncrement()) < count) {
-      futures.get(id).run();
-      if (id >= count - 1) {
-        // save redundant CAS in case this was the last task
-        break;
-      }
-    }
+    work.run();
     Throwable exc = null;
     List<T> results = new ArrayList<>(count);
     for (int i = 0; i < count; i++) {
