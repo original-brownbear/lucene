@@ -23,12 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executor;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.RunnableFuture;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.lucene.util.IOUtils;
 import org.apache.lucene.util.ThreadInterruptedException;
@@ -117,8 +112,13 @@ public final class TaskExecutor {
             }
           }
         };
-    for (int j = 0; j < count - 1; j++) {
-      executor.execute(work);
+    final Executor executorRef = executor;
+    int forkCount = count - 1;
+    if (executorRef instanceof ThreadPoolExecutor threadPoolExecutor) {
+      forkCount = Math.min(threadPoolExecutor.getMaximumPoolSize(), forkCount);
+    }
+    for (int j = 0; j < forkCount; j++) {
+      executorRef.execute(work);
     }
     int id;
     while ((id = taskId.getAndIncrement()) < count) {
