@@ -74,9 +74,11 @@ public final class TaskExecutor {
 
   private <T> List<T> invokeMultiple(Collection<Callable<T>> callables, int count)
       throws IOException {
-    final List<RunnableFuture<T>> futures = new ArrayList<>(count);
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    final RunnableFuture<T>[] futures = new RunnableFuture[count];
+    int j = 0;
     for (Callable<T> callable : callables) {
-      futures.add(
+      futures[j++] =
           new FutureTask<>(callable) {
 
             @Override
@@ -97,7 +99,7 @@ public final class TaskExecutor {
               set(null);
               return true;
             }
-          });
+          };
     }
 
     final AtomicInteger taskId = new AtomicInteger(0);
@@ -105,7 +107,11 @@ public final class TaskExecutor {
         () -> {
           int id;
           while ((id = taskId.getAndIncrement()) < count) {
-            futures.get(id).run();
+            var future = futures[id];
+            if (future.isDone()) {
+              break;
+            }
+            future.run();
             if (id >= count - 1) {
               // save redundant CAS in case this was the last task
               break;
@@ -117,14 +123,19 @@ public final class TaskExecutor {
     if (executorRef instanceof ThreadPoolExecutor threadPoolExecutor) {
       forkCount = Math.min(threadPoolExecutor.getMaximumPoolSize(), forkCount);
     }
-    for (int j = 0; j < forkCount; j++) {
+    for (int k = 0; k < forkCount; k++) {
       executorRef.execute(work);
     }
-    work.run();
+    for (int i = futures.length - 1; i >= 0; i--) {
+      var future = futures[i];
+      if (future.isDone()) {
+        break;
+      }
+      future.run();
+    }
     Throwable exc = null;
     List<T> results = new ArrayList<>(count);
-    for (int i = 0; i < count; i++) {
-      Future<T> future = futures.get(i);
+    for (Future<T> future : futures) {
       try {
         results.add(future.get());
       } catch (InterruptedException e) {
@@ -145,7 +156,7 @@ public final class TaskExecutor {
     return "TaskExecutor(" + "executor=" + executor + ')';
   }
 
-  private static <T> boolean assertAllFuturesCompleted(Collection<RunnableFuture<T>> futures) {
+  private static <T> boolean assertAllFuturesCompleted(RunnableFuture<T>[] futures) {
     for (RunnableFuture<T> future : futures) {
       if (future.isDone() == false) {
         return false;
