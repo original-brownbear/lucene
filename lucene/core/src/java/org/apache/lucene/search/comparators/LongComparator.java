@@ -51,7 +51,7 @@ public class LongComparator extends NumericComparator<Long> {
 
   @Override
   public Long value(int slot) {
-    return Long.valueOf(values[slot]);
+    return values[slot];
   }
 
   @Override
@@ -77,6 +77,7 @@ public class LongComparator extends NumericComparator<Long> {
     }
 
     private long getValueForDoc(int doc) throws IOException {
+      final var docValues = this.docValues;
       if (docValues.advanceExact(doc)) {
         return docValues.longValue();
       } else {
