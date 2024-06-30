@@ -51,42 +51,117 @@ public class DirectReader {
     return getInstance(slice, bitsPerValue, 0);
   }
 
-  private static final int[] maskShifts = new int[] {0, 7, 3, 0, 1};
-
   /**
    * Retrieves an instance from the specified {@code offset} of the given slice decoding {@code
    * bitsPerValue} for each value
    */
   public static LongValues getInstance(RandomAccessInput slice, int bitsPerValue, long offset) {
-    if (bitsPerValue == Long.SIZE) {
-      return index -> {
+    return switch (bitsPerValue) {
+      case 1 -> index -> {
+        try {
+          int shift = (int) (index & 7);
+          return (slice.readByte(offset + (index >>> 3)) >>> shift) & 0x1;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 2 -> index -> {
+        try {
+          int shift = ((int) (index & 3)) << 1;
+          return (slice.readByte(offset + (index >>> 2)) >>> shift) & 0x3;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 4 -> index -> {
+        try {
+          int shift = (int) (index & 1) << 2;
+          return (slice.readByte(offset + (index >>> 1)) >>> shift) & 0xF;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 8 -> index -> {
+        try {
+          return slice.readByte(offset + index) & 0xFF;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 12 -> index -> {
+        try {
+          int shift = (int) (index & 1) << 2;
+          return (slice.readShort(offset + ((index * 12) >>> 3)) >>> shift) & 0xFFF;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 16 -> index -> {
+        try {
+          return slice.readShort(offset + (index << 1)) & 0xFFFF;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 20 -> index -> {
+        try {
+          int shift = (int) (index & 1) << 2;
+          return (slice.readInt(offset + ((index * 20) >>> 3)) >>> shift) & 0xFFFFF;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 24 -> index -> {
+        try {
+          return slice.readInt(offset + index * 3) & 0xFFFFFF;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 28 -> index -> {
+        try {
+          int shift = (int) (index & 1) << 2;
+          return (slice.readInt(offset + ((index * 28) >>> 3)) >>> shift) & 0xFFFFFFF;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 32 -> index -> {
+        try {
+          return slice.readInt(offset + (index << 2)) & 0xFFFFFFFFL;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 40 -> index -> {
+        try {
+          return slice.readLong(offset + index * 5) & 0xFFFFFFFFFFL;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 48 -> index -> {
+        try {
+          return slice.readLong(offset + index * 6) & 0xFFFFFFFFFFFFL;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 56 -> index -> {
+        try {
+          return slice.readLong(offset + index * 7) & 0xFFFFFFFFFFFFFFL;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+      case 64 -> index -> {
         try {
           return slice.readLong(offset + (index << 3));
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
       };
-    }
-    return index -> {
-      try {
-        long idx = offset + (index * bitsPerValue >>> 3);
-        final long read;
-        if (bitsPerValue <= Byte.SIZE) {
-          read = slice.readByte(idx);
-        } else if (bitsPerValue <= Short.SIZE) {
-          read = slice.readShort(idx);
-        } else if (bitsPerValue <= Integer.SIZE) {
-          read = slice.readInt(idx);
-        } else {
-          read = slice.readLong(idx);
-        }
-        int maskBits = bitsPerValue % 8;
-        int shift = ((int) (index & maskShifts[maskBits]) * maskBits);
-        long mask = (1L << bitsPerValue) - 1;
-        return (read >>> shift) & mask;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
+      default -> throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
     };
   }
 
