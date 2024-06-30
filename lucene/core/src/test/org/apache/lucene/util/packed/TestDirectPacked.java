@@ -139,7 +139,7 @@ public class TestDirectPacked extends LuceneTestCase {
                 input.randomAccessSlice(0, input.length()), bitsRequired, offset);
       }
       for (int j = 0; j < original.length; j++) {
-        assertEquals("bpv=" + bpv, original[j], reader.get(j));
+        assertEquals("bits" + bitsRequired + " bpv=" + bpv, original[j], reader.get(j));
       }
       input.close();
     }

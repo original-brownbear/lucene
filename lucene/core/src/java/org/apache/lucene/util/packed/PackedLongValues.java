@@ -24,7 +24,7 @@ import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.RamUsageEstimator;
 
 /** Utility class to compress integers into a {@link LongValues} instance. */
-public class PackedLongValues extends LongValues implements Accountable {
+public class PackedLongValues implements LongValues, Accountable {
 
   private static final long BASE_RAM_BYTES_USED =
       RamUsageEstimator.shallowSizeOfInstance(PackedLongValues.class);

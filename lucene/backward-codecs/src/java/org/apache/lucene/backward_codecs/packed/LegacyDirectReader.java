@@ -55,41 +55,26 @@ public class LegacyDirectReader {
    * bitsPerValue} for each value
    */
   public static LongValues getInstance(RandomAccessInput slice, int bitsPerValue, long offset) {
-    switch (bitsPerValue) {
-      case 1:
-        return new DirectPackedReader1(slice, offset);
-      case 2:
-        return new DirectPackedReader2(slice, offset);
-      case 4:
-        return new DirectPackedReader4(slice, offset);
-      case 8:
-        return new DirectPackedReader8(slice, offset);
-      case 12:
-        return new DirectPackedReader12(slice, offset);
-      case 16:
-        return new DirectPackedReader16(slice, offset);
-      case 20:
-        return new DirectPackedReader20(slice, offset);
-      case 24:
-        return new DirectPackedReader24(slice, offset);
-      case 28:
-        return new DirectPackedReader28(slice, offset);
-      case 32:
-        return new DirectPackedReader32(slice, offset);
-      case 40:
-        return new DirectPackedReader40(slice, offset);
-      case 48:
-        return new DirectPackedReader48(slice, offset);
-      case 56:
-        return new DirectPackedReader56(slice, offset);
-      case 64:
-        return new DirectPackedReader64(slice, offset);
-      default:
-        throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
-    }
+    return switch (bitsPerValue) {
+      case 1 -> new DirectPackedReader1(slice, offset);
+      case 2 -> new DirectPackedReader2(slice, offset);
+      case 4 -> new DirectPackedReader4(slice, offset);
+      case 8 -> new DirectPackedReader8(slice, offset);
+      case 12 -> new DirectPackedReader12(slice, offset);
+      case 16 -> new DirectPackedReader16(slice, offset);
+      case 20 -> new DirectPackedReader20(slice, offset);
+      case 24 -> new DirectPackedReader24(slice, offset);
+      case 28 -> new DirectPackedReader28(slice, offset);
+      case 32 -> new DirectPackedReader32(slice, offset);
+      case 40 -> new DirectPackedReader40(slice, offset);
+      case 48 -> new DirectPackedReader48(slice, offset);
+      case 56 -> new DirectPackedReader56(slice, offset);
+      case 64 -> new DirectPackedReader64(slice, offset);
+      default -> throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
+    };
   }
 
-  static final class DirectPackedReader1 extends LongValues {
+  static final class DirectPackedReader1 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -109,7 +94,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader2 extends LongValues {
+  static final class DirectPackedReader2 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -129,7 +114,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader4 extends LongValues {
+  static final class DirectPackedReader4 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -149,7 +134,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader8 extends LongValues {
+  static final class DirectPackedReader8 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -168,7 +153,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader12 extends LongValues {
+  static final class DirectPackedReader12 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -189,7 +174,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader16 extends LongValues {
+  static final class DirectPackedReader16 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -208,7 +193,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader20 extends LongValues {
+  static final class DirectPackedReader20 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -231,7 +216,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader24 extends LongValues {
+  static final class DirectPackedReader24 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -250,7 +235,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader28 extends LongValues {
+  static final class DirectPackedReader28 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -271,7 +256,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader32 extends LongValues {
+  static final class DirectPackedReader32 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -290,7 +275,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader40 extends LongValues {
+  static final class DirectPackedReader40 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -309,7 +294,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader48 extends LongValues {
+  static final class DirectPackedReader48 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -328,7 +313,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader56 extends LongValues {
+  static final class DirectPackedReader56 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -347,7 +332,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader64 extends LongValues {
+  static final class DirectPackedReader64 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 

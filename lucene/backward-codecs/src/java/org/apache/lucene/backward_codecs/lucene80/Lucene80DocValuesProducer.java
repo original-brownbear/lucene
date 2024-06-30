@@ -609,12 +609,7 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
 
   private LongValues getNumericValues(NumericEntry entry) throws IOException {
     if (entry.bitsPerValue == 0) {
-      return new LongValues() {
-        @Override
-        public long get(long index) {
-          return entry.minValue;
-        }
-      };
+      return index -> entry.minValue;
     } else {
       final RandomAccessInput slice =
           data.randomAccessSlice(entry.valuesOffset, entry.valuesLength);
@@ -635,29 +630,14 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
         final LongValues values = LegacyDirectReader.getInstance(slice, entry.bitsPerValue);
         if (entry.table != null) {
           final long[] table = entry.table;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return table[(int) values.get(index)];
-            }
-          };
+          return index -> table[(int) values.get(index)];
         } else if (entry.gcd != 1) {
           final long gcd = entry.gcd;
           final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) * gcd + minValue;
-            }
-          };
+          return index -> values.get(index) * gcd + minValue;
         } else if (entry.minValue != 0) {
           final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) + minValue;
-            }
-          };
+          return index -> values.get(index) + minValue;
         } else {
           return values;
         }
@@ -984,13 +964,7 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
 
     final LongValues ords;
     if (entry.bitsPerValue == 0) {
-      ords =
-          new LongValues() {
-            @Override
-            public long get(long index) {
-              return 0L;
-            }
-          };
+      ords = LongValues.ZEROES;
     } else {
       final RandomAccessInput slice = data.randomAccessSlice(entry.ordsOffset, entry.ordsLength);
       ords = LegacyDirectReader.getInstance(slice, entry.bitsPerValue);

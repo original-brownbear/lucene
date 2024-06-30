@@ -27,7 +27,7 @@ import org.apache.lucene.util.LongValues;
  *
  * @see DirectMonotonicWriter
  */
-public final class DirectMonotonicReader extends LongValues {
+public final class DirectMonotonicReader implements LongValues {
 
   /**
    * In-memory metadata that needs to be kept around for {@link DirectMonotonicReader} to read data

@@ -32,7 +32,7 @@ import org.apache.lucene.util.RamUsageEstimator;
  *
  * @lucene.internal
  */
-public class MonotonicBlockPackedReader extends LongValues implements Accountable {
+public class MonotonicBlockPackedReader implements LongValues, Accountable {
 
   static long expected(long origin, float average, int index) {
     return origin + (long) (average * (long) index);
@@ -87,27 +87,24 @@ public class MonotonicBlockPackedReader extends LongValues implements Accountabl
         final long maskRight = ((1L << bitsPerValue) - 1);
         final int bpvMinusBlockSize = bitsPerValue - BLOCK_SIZE;
         subReaders[i] =
-            new LongValues() {
-              @Override
-              public long get(long index) {
-                // The abstract index in a bit stream
-                final long majorBitPos = index * bitsPerValue;
-                // The offset of the first block in the backing byte-array
-                int blockOffset = (int) (majorBitPos >>> BLOCK_BITS);
-                // The number of value-bits after the first byte
-                long endBits = (majorBitPos & MOD_MASK) + bpvMinusBlockSize;
-                if (endBits <= 0) {
-                  // Single block
-                  return ((blocks[blockOffset] & 0xFFL) >>> -endBits) & maskRight;
-                }
-                // Multiple blocks
-                long value = ((blocks[blockOffset++] & 0xFFL) << endBits) & maskRight;
-                while (endBits > BLOCK_SIZE) {
-                  endBits -= BLOCK_SIZE;
-                  value |= (blocks[blockOffset++] & 0xFFL) << endBits;
-                }
-                return value | ((blocks[blockOffset] & 0xFFL) >>> (BLOCK_SIZE - endBits));
+            index -> {
+              // The abstract index in a bit stream
+              final long majorBitPos = index * bitsPerValue;
+              // The offset of the first block in the backing byte-array
+              int blockOffset = (int) (majorBitPos >>> BLOCK_BITS);
+              // The number of value-bits after the first byte
+              long endBits = (majorBitPos & MOD_MASK) + bpvMinusBlockSize;
+              if (endBits <= 0) {
+                // Single block
+                return ((blocks[blockOffset] & 0xFFL) >>> -endBits) & maskRight;
               }
+              // Multiple blocks
+              long value = ((blocks[blockOffset++] & 0xFFL) << endBits) & maskRight;
+              while (endBits > BLOCK_SIZE) {
+                endBits -= BLOCK_SIZE;
+                value |= (blocks[blockOffset++] & 0xFFL) << endBits;
+              }
+              return value | ((blocks[blockOffset] & 0xFFL) >>> (BLOCK_SIZE - endBits));
             };
       }
     }

@@ -646,12 +646,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
   private LongValues getNumericValues(NumericEntry entry) throws IOException {
     if (entry.bitsPerValue == 0) {
-      return new LongValues() {
-        @Override
-        public long get(long index) {
-          return entry.minValue;
-        }
-      };
+      return index -> entry.minValue;
     } else {
       final RandomAccessInput slice =
           data.randomAccessSlice(entry.valuesOffset, entry.valuesLength);
@@ -678,29 +673,14 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             getDirectReaderInstance(slice, entry.bitsPerValue, 0L, entry.numValues);
         if (entry.table != null) {
           final long[] table = entry.table;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return table[(int) values.get(index)];
-            }
-          };
+          return index -> table[(int) values.get(index)];
         } else if (entry.gcd != 1) {
           final long gcd = entry.gcd;
           final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) * gcd + minValue;
-            }
-          };
+          return index -> values.get(index) * gcd + minValue;
         } else if (entry.minValue != 0) {
           final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) + minValue;
-            }
-          };
+          return index -> values.get(index) + minValue;
         } else {
           return values;
         }
