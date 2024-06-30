@@ -51,27 +51,38 @@ public class DirectReader {
     return getInstance(slice, bitsPerValue, 0);
   }
 
+  private static final int[] maskShifts = new int[] {0, 7, 3, 0, 1};
+
   /**
    * Retrieves an instance from the specified {@code offset} of the given slice decoding {@code
    * bitsPerValue} for each value
    */
   public static LongValues getInstance(RandomAccessInput slice, int bitsPerValue, long offset) {
+    if (bitsPerValue == Long.SIZE) {
+      return index -> {
+        try {
+          return slice.readLong(offset + (index << 3));
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      };
+    }
     return index -> {
       try {
         long idx = offset + (index * bitsPerValue >>> 3);
         final long read;
-        if (bitsPerValue <= 8) {
+        if (bitsPerValue <= Byte.SIZE) {
           read = slice.readByte(idx);
-        } else if (bitsPerValue <= 16) {
+        } else if (bitsPerValue <= Short.SIZE) {
           read = slice.readShort(idx);
-        } else if (bitsPerValue <= 32) {
+        } else if (bitsPerValue <= Integer.SIZE) {
           read = slice.readInt(idx);
         } else {
           read = slice.readLong(idx);
         }
         int maskBits = bitsPerValue % 8;
-        int shift = maskBits == 0 ? 0 : ((int) (index & (8 / maskBits - 1)) * maskBits);
-        long mask = bitsPerValue == Long.SIZE ? ~0 : ((1L << bitsPerValue) - 1);
+        int shift = ((int) (index & maskShifts[maskBits]) * maskBits);
+        long mask = (1L << bitsPerValue) - 1;
         return (read >>> shift) & mask;
       } catch (IOException e) {
         throw new RuntimeException(e);
