@@ -28,7 +28,6 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.MultiDocValues;
-import org.apache.lucene.index.MultiDocValues.MultiSortedSetDocValues;
 import org.apache.lucene.index.OrdinalMap;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.SortedDocValues;
@@ -146,21 +145,29 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       SortedSetDocValues multiValues, SortedDocValues singleValues, int[] counts)
       throws IOException {
     if (singleValues != null) {
-      for (int doc = singleValues.nextDoc();
-          doc != DocIdSetIterator.NO_MORE_DOCS;
-          doc = singleValues.nextDoc()) {
-        counts[singleValues.ordValue()]++;
-      }
+      aggregateSingleValueCounts(singleValues, counts);
     } else {
-      for (int doc = multiValues.nextDoc();
-          doc != DocIdSetIterator.NO_MORE_DOCS;
-          doc = multiValues.nextDoc()) {
-        final int docValueCount = multiValues.docValueCount();
-        for (int i = 0; i < docValueCount; i++) {
-          int term = (int) multiValues.nextOrd();
-          counts[term]++;
-        }
+      aggregateMultiValueCounts(multiValues, counts);
+    }
+  }
+
+  private static void aggregateMultiValueCounts(SortedSetDocValues multiValues, int[] counts)
+      throws IOException {
+    for (int doc = multiValues.nextDoc();
+        doc != DocIdSetIterator.NO_MORE_DOCS;
+        doc = multiValues.nextDoc()) {
+      final int docValueCount = multiValues.docValueCount();
+      for (int i = 0; i < docValueCount; i++) {
+        int term = (int) multiValues.nextOrd();
+        counts[term]++;
       }
+    }
+  }
+
+  private static void aggregateSingleValueCounts(SortedDocValues singleValues, int[] counts)
+      throws IOException {
+    while (singleValues.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+      counts[singleValues.ordValue()]++;
     }
   }
 
@@ -194,6 +201,7 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     // (distributed faceting).  but this has much higher
     // temp ram req'ts (sum of number of ords across all
     // segs)
+    int[] counts = this.counts;
     if (ordinalMap != null) {
       final LongValues ordMap = ordinalMap.getGlobalOrds(segOrd);
 
@@ -202,12 +210,13 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       if (hits != null && hits.totalHits < numSegOrds / 10) {
         // Remap every ord to global ord as we iterate:
         if (singleValues != null) {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+          while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
             counts[(int) ordMap.get(singleValues.ordValue())]++;
           }
         } else {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            for (int i = 0; i < multiValues.docValueCount(); i++) {
+          while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+            int docValueCount = multiValues.docValueCount();
+            for (int i = 0; i < docValueCount; i++) {
               int term = (int) multiValues.nextOrd();
               counts[(int) ordMap.get(term)]++;
             }
@@ -269,12 +278,13 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       int[] segCounts)
       throws IOException {
     if (singleValues != null) {
-      for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+      while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
         segCounts[singleValues.ordValue()]++;
       }
     } else {
-      for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-        for (int i = 0; i < multiValues.docValueCount(); i++) {
+      while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+        int docValueCount = multiValues.docValueCount();
+        for (int i = 0; i < docValueCount; i++) {
           int term = (int) multiValues.nextOrd();
           segCounts[term]++;
         }
@@ -290,8 +300,9 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     // TODO: is this right?  really, we need a way to
     // verify that this ordinalMap "matches" the leaves in
     // matchingDocs...
-    if (dv instanceof MultiDocValues.MultiSortedSetDocValues && matchingDocs.size() > 1) {
-      ordinalMap = ((MultiSortedSetDocValues) dv).mapping;
+    if (dv instanceof MultiDocValues.MultiSortedSetDocValues multiSortedSetDocValues
+        && matchingDocs.size() > 1) {
+      ordinalMap = multiSortedSetDocValues.mapping;
     } else {
       ordinalMap = null;
     }
@@ -321,19 +332,19 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     // TODO: is this right?  really, we need a way to
     // verify that this ordinalMap "matches" the leaves in
     // matchingDocs...
-    if (dv instanceof MultiDocValues.MultiSortedSetDocValues) {
-      ordinalMap = ((MultiSortedSetDocValues) dv).mapping;
+    if (dv instanceof MultiDocValues.MultiSortedSetDocValues multiSortedSetDocValues) {
+      ordinalMap = multiSortedSetDocValues.mapping;
     } else {
       ordinalMap = null;
     }
 
     for (LeafReaderContext context : state.getReader().leaves()) {
-
-      Bits liveDocs = context.reader().getLiveDocs();
+      LeafReader reader = context.reader();
+      Bits liveDocs = reader.getLiveDocs();
       if (liveDocs == null) {
-        countOneSegmentNHLD(ordinalMap, context.reader(), context.ord);
+        countOneSegmentNHLD(ordinalMap, reader, context.ord);
       } else {
-        countOneSegment(ordinalMap, context.reader(), context.ord, null, liveDocs);
+        countOneSegment(ordinalMap, reader, context.ord, null, liveDocs);
       }
     }
   }

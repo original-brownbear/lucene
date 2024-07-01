@@ -24,6 +24,7 @@ import org.apache.lucene.facet.FacetsCollector.MatchingDocs;
 import org.apache.lucene.facet.FacetsConfig;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexReader;
+import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.NumericDocValues;
 import org.apache.lucene.index.SortedNumericDocValues;
@@ -80,6 +81,7 @@ public class FastTaxonomyFacetCounts extends TaxonomyFacets {
         continue;
       }
       initializeValueCounters();
+      int[] counts = this.counts;
 
       NumericDocValues singleValued = DocValues.unwrapSingleton(multiValued);
 
@@ -100,13 +102,15 @@ public class FastTaxonomyFacetCounts extends TaxonomyFacets {
       } else {
         if (counts != null) {
           while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
-            for (int i = 0; i < multiValued.docValueCount(); i++) {
+            int docValueCount = multiValued.docValueCount();
+            for (int i = 0; i < docValueCount; i++) {
               counts[(int) multiValued.nextValue()]++;
             }
           }
         } else {
           while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
-            for (int i = 0; i < multiValued.docValueCount(); i++) {
+            int docValueCount = multiValued.docValueCount();
+            for (int i = 0; i < docValueCount; i++) {
               sparseCounts.addTo((int) multiValued.nextValue(), 1);
             }
           }
@@ -119,58 +123,65 @@ public class FastTaxonomyFacetCounts extends TaxonomyFacets {
 
   private void countAll(IndexReader reader) throws IOException {
     for (LeafReaderContext context : reader.leaves()) {
-      SortedNumericDocValues multiValued =
-          context.reader().getSortedNumericDocValues(indexFieldName);
+      LeafReader leafReader = context.reader();
+      SortedNumericDocValues multiValued = leafReader.getSortedNumericDocValues(indexFieldName);
       if (multiValued == null) {
         continue;
       }
       initializeValueCounters();
+      int[] counts = this.counts;
       assert counts != null;
 
-      Bits liveDocs = context.reader().getLiveDocs();
+      Bits liveDocs = leafReader.getLiveDocs();
 
       NumericDocValues singleValued = DocValues.unwrapSingleton(multiValued);
       if (singleValued != null) {
-        if (liveDocs == null) {
-          for (int doc = singleValued.nextDoc();
-              doc != DocIdSetIterator.NO_MORE_DOCS;
-              doc = singleValued.nextDoc()) {
-            counts[(int) singleValued.longValue()]++;
-          }
-        } else {
-          for (int doc = singleValued.nextDoc();
-              doc != DocIdSetIterator.NO_MORE_DOCS;
-              doc = singleValued.nextDoc()) {
-            if (liveDocs.get(doc) == false) {
-              continue;
-            }
-            counts[(int) singleValued.longValue()]++;
-          }
-        }
+        countSingleValues(liveDocs, singleValued, counts);
       } else {
-        if (liveDocs == null) {
-          for (int doc = multiValued.nextDoc();
-              doc != DocIdSetIterator.NO_MORE_DOCS;
-              doc = multiValued.nextDoc()) {
-            for (int i = 0; i < multiValued.docValueCount(); i++) {
-              counts[(int) multiValued.nextValue()]++;
-            }
-          }
-        } else {
-          for (int doc = multiValued.nextDoc();
-              doc != DocIdSetIterator.NO_MORE_DOCS;
-              doc = multiValued.nextDoc()) {
-            if (liveDocs.get(doc) == false) {
-              continue;
-            }
-            for (int i = 0; i < multiValued.docValueCount(); i++) {
-              counts[(int) multiValued.nextValue()]++;
-            }
-          }
-        }
+        countMultiValues(liveDocs, multiValued, counts);
       }
     }
 
     rollup();
+  }
+
+  private static void countMultiValues(
+      Bits liveDocs, SortedNumericDocValues multiValued, int[] counts) throws IOException {
+    if (liveDocs == null) {
+      while (multiValued.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+        int docValueCount = multiValued.docValueCount();
+        for (int i = 0; i < docValueCount; i++) {
+          counts[(int) multiValued.nextValue()]++;
+        }
+      }
+    } else {
+      int doc;
+      while ((doc = multiValued.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
+        if (liveDocs.get(doc) == false) {
+          continue;
+        }
+        int docValueCount = multiValued.docValueCount();
+        for (int i = 0; i < docValueCount; i++) {
+          counts[(int) multiValued.nextValue()]++;
+        }
+      }
+    }
+  }
+
+  private static void countSingleValues(Bits liveDocs, NumericDocValues singleValued, int[] counts)
+      throws IOException {
+    if (liveDocs == null) {
+      while (singleValued.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+        counts[(int) singleValued.longValue()]++;
+      }
+    } else {
+      int doc;
+      while ((doc = singleValued.nextDoc()) != DocIdSetIterator.NO_MORE_DOCS) {
+        if (liveDocs.get(doc) == false) {
+          continue;
+        }
+        counts[(int) singleValued.longValue()]++;
+      }
+    }
   }
 }
