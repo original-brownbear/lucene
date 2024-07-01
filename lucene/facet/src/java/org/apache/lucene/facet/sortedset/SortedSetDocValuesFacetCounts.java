@@ -183,15 +183,7 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     // It's slightly more efficient to work against SortedDocValues if the field is actually
     // single-valued (see: LUCENE-5309)
     SortedDocValues singleValues = DocValues.unwrapSingleton(multiValues);
-    DocIdSetIterator valuesIt = singleValues != null ? singleValues : multiValues;
-
-    DocIdSetIterator it;
-    if (hits == null) {
-      assert liveDocs != null;
-      it = FacetUtils.liveDocsDISI(valuesIt, liveDocs);
-    } else {
-      it = ConjunctionUtils.intersectIterators(Arrays.asList(hits.bits.iterator(), valuesIt));
-    }
+    DocIdSetIterator it = getDocIdSetIter(hits, liveDocs, singleValues, multiValues);
 
     // TODO: yet another option is to count all segs
     // first, only in seg-ord space, and then do a
@@ -224,18 +216,7 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       } else {
         // First count in seg-ord space:
         final int[] segCounts = new int[numSegOrds];
-        if (singleValues != null) {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            segCounts[singleValues.ordValue()]++;
-          }
-        } else {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            for (int i = 0; i < multiValues.docValueCount(); i++) {
-              int term = (int) multiValues.nextOrd();
-              segCounts[term]++;
-            }
-          }
-        }
+        countValues(multiValues, singleValues, it, segCounts);
 
         // Then, migrate to global ords:
         for (int ord = 0; ord < numSegOrds; ord++) {
@@ -249,16 +230,53 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     } else {
       // No ord mapping (e.g., single segment index):
       // just aggregate directly into counts:
-      if (singleValues != null) {
-        for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-          counts[singleValues.ordValue()]++;
-        }
-      } else {
-        for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-          for (int i = 0; i < multiValues.docValueCount(); i++) {
-            int term = (int) multiValues.nextOrd();
-            counts[term]++;
-          }
+      countValues(multiValues, singleValues, it, counts);
+    }
+  }
+
+  /**
+   * Build doc id set iterator
+   *
+   * @param hits hits
+   * @param liveDocs live docs
+   * @param singleValues single values
+   * @param multiValues multi values
+   * @return doc id set iterator
+   * @throws IOException on failure
+   */
+  public static DocIdSetIterator getDocIdSetIter(
+      MatchingDocs hits,
+      Bits liveDocs,
+      SortedDocValues singleValues,
+      SortedSetDocValues multiValues)
+      throws IOException {
+    DocIdSetIterator valuesIt = singleValues != null ? singleValues : multiValues;
+
+    DocIdSetIterator it;
+    if (hits == null) {
+      assert liveDocs != null;
+      it = FacetUtils.liveDocsDISI(valuesIt, liveDocs);
+    } else {
+      it = ConjunctionUtils.intersectIterators(Arrays.asList(hits.bits.iterator(), valuesIt));
+    }
+    return it;
+  }
+
+  private static void countValues(
+      SortedSetDocValues multiValues,
+      SortedDocValues singleValues,
+      DocIdSetIterator it,
+      int[] segCounts)
+      throws IOException {
+    if (singleValues != null) {
+      for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+        segCounts[singleValues.ordValue()]++;
+      }
+    } else {
+      for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+        for (int i = 0; i < multiValues.docValueCount(); i++) {
+          int term = (int) multiValues.nextOrd();
+          segCounts[term]++;
         }
       }
     }

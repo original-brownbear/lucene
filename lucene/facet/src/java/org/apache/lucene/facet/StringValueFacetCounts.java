@@ -18,9 +18,9 @@ package org.apache.lucene.facet;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import org.apache.lucene.facet.sortedset.SortedSetDocValuesFacetCounts;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReaderContext;
@@ -30,7 +30,6 @@ import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.SortedDocValues;
 import org.apache.lucene.index.SortedSetDocValues;
 import org.apache.lucene.internal.hppc.IntIntHashMap;
-import org.apache.lucene.search.ConjunctionUtils;
 import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.MatchAllDocsQuery;
 import org.apache.lucene.util.Bits;
@@ -403,17 +402,8 @@ public class StringValueFacetCounts extends Facets {
     // It's slightly more efficient to work against SortedDocValues if the field is actually
     // single-valued (see: LUCENE-5309)
     SortedDocValues singleValues = DocValues.unwrapSingleton(multiValues);
-    DocIdSetIterator valuesIt = singleValues != null ? singleValues : multiValues;
-
-    // Intersect hits with doc values unless we're "counting all," in which case we'll iterate
-    // all doc values for this segment:
-    DocIdSetIterator it;
-    if (hits == null) {
-      assert liveDocs != null;
-      it = FacetUtils.liveDocsDISI(valuesIt, liveDocs);
-    } else {
-      it = ConjunctionUtils.intersectIterators(Arrays.asList(hits.bits.iterator(), valuesIt));
-    }
+    DocIdSetIterator it =
+        SortedSetDocValuesFacetCounts.getDocIdSetIter(hits, liveDocs, singleValues, multiValues);
 
     // TODO: yet another option is to count all segs
     // first, only in seg-ord space, and then do a
@@ -433,17 +423,7 @@ public class StringValueFacetCounts extends Facets {
           totalDocCount++;
         }
       } else {
-        for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-          boolean countedDocInTotal = false;
-          for (int i = 0; i < multiValues.docValueCount(); i++) {
-            int term = (int) multiValues.nextOrd();
-            increment(term);
-            if (countedDocInTotal == false) {
-              totalDocCount++;
-              countedDocInTotal = true;
-            }
-          }
-        }
+        countMultiNHLD(multiValues, it);
       }
     } else {
       // We need to map segment ordinals to globals. We have two different approaches to this
@@ -455,22 +435,9 @@ public class StringValueFacetCounts extends Facets {
       if (hits != null && hits.totalHits < segmentCardinality / 10) {
         // Remap every ord to global ord as we iterate:
         if (singleValues != null) {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            increment((int) ordMap.get(singleValues.ordValue()));
-            totalDocCount++;
-          }
+          countSingle(it, ordMap, singleValues);
         } else {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            boolean countedDocInTotal = false;
-            for (int i = 0; i < multiValues.docValueCount(); i++) {
-              int term = (int) multiValues.nextOrd();
-              increment((int) ordMap.get(term));
-              if (countedDocInTotal == false) {
-                totalDocCount++;
-                countedDocInTotal = true;
-              }
-            }
-          }
+          countMulti(multiValues, it, ordMap);
         }
       } else {
         // First count in seg-ord space.
@@ -479,30 +446,73 @@ public class StringValueFacetCounts extends Facets {
         // to the segment cardinality), so we count the segment densely:
         final int[] segCounts = new int[segmentCardinality];
         if (singleValues != null) {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            segCounts[singleValues.ordValue()]++;
-            totalDocCount++;
-          }
+          countSingle(it, segCounts, singleValues);
         } else {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            boolean countedDocInTotal = false;
-            for (int i = 0; i < multiValues.docValueCount(); i++) {
-              int term = (int) multiValues.nextOrd();
-              segCounts[term]++;
-              if (countedDocInTotal == false) {
-                totalDocCount++;
-                countedDocInTotal = true;
-              }
-            }
-          }
+          countMulti(multiValues, it, segCounts);
         }
 
         // Then, migrate to global ords:
-        for (int ord = 0; ord < segmentCardinality; ord++) {
-          int count = segCounts[ord];
-          if (count != 0) {
-            increment((int) ordMap.get(ord), count);
-          }
+        migrateToGlobalOrds(segmentCardinality, segCounts, ordMap);
+      }
+    }
+  }
+
+  private void countSingle(DocIdSetIterator it, LongValues ordMap, SortedDocValues singleValues)
+      throws IOException {
+    for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+      increment((int) ordMap.get(singleValues.ordValue()));
+      totalDocCount++;
+    }
+  }
+
+  private void countSingle(DocIdSetIterator it, int[] segCounts, SortedDocValues singleValues)
+      throws IOException {
+    for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+      segCounts[singleValues.ordValue()]++;
+      totalDocCount++;
+    }
+  }
+
+  private void countMulti(SortedSetDocValues multiValues, DocIdSetIterator it, int[] segCounts)
+      throws IOException {
+    for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+      boolean countedDocInTotal = false;
+      for (int i = 0; i < multiValues.docValueCount(); i++) {
+        int term = (int) multiValues.nextOrd();
+        segCounts[term]++;
+        if (countedDocInTotal == false) {
+          totalDocCount++;
+          countedDocInTotal = true;
+        }
+      }
+    }
+  }
+
+  private void countMulti(SortedSetDocValues multiValues, DocIdSetIterator it, LongValues ordMap)
+      throws IOException {
+    for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+      boolean countedDocInTotal = false;
+      for (int i = 0; i < multiValues.docValueCount(); i++) {
+        int term = (int) multiValues.nextOrd();
+        increment((int) ordMap.get(term));
+        if (countedDocInTotal == false) {
+          totalDocCount++;
+          countedDocInTotal = true;
+        }
+      }
+    }
+  }
+
+  private void countMultiNHLD(SortedSetDocValues multiValues, DocIdSetIterator it)
+      throws IOException {
+    for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
+      boolean countedDocInTotal = false;
+      for (int i = 0; i < multiValues.docValueCount(); i++) {
+        int term = (int) multiValues.nextOrd();
+        increment(term);
+        if (countedDocInTotal == false) {
+          totalDocCount++;
+          countedDocInTotal = true;
         }
       }
     }
@@ -527,19 +537,7 @@ public class StringValueFacetCounts extends Facets {
           totalDocCount++;
         }
       } else {
-        for (int doc = multiValues.nextDoc();
-            doc != DocIdSetIterator.NO_MORE_DOCS;
-            doc = multiValues.nextDoc()) {
-          boolean countedDocInTotal = false;
-          for (int i = 0; i < multiValues.docValueCount(); i++) {
-            int term = (int) multiValues.nextOrd();
-            increment(term);
-            if (countedDocInTotal == false) {
-              totalDocCount++;
-              countedDocInTotal = true;
-            }
-          }
-        }
+        countMultiNHLD(multiValues, multiValues);
       }
     } else {
       // We need to map segment ordinals to globals. We have two different approaches to this
@@ -554,34 +552,20 @@ public class StringValueFacetCounts extends Facets {
       // to the segment cardinality), so we count the segment densely:
       final int[] segCounts = new int[segmentCardinality];
       if (singleValues != null) {
-        for (int doc = singleValues.nextDoc();
-            doc != DocIdSetIterator.NO_MORE_DOCS;
-            doc = singleValues.nextDoc()) {
-          segCounts[singleValues.ordValue()]++;
-          totalDocCount++;
-        }
+        countSingle(singleValues, segCounts, singleValues);
       } else {
-        for (int doc = multiValues.nextDoc();
-            doc != DocIdSetIterator.NO_MORE_DOCS;
-            doc = multiValues.nextDoc()) {
-          boolean countedDocInTotal = false;
-          for (int i = 0; i < multiValues.docValueCount(); i++) {
-            int term = (int) multiValues.nextOrd();
-            segCounts[term]++;
-            if (countedDocInTotal == false) {
-              totalDocCount++;
-              countedDocInTotal = true;
-            }
-          }
-        }
+        countMulti(multiValues, multiValues, segCounts);
       }
 
-      // Then, migrate to global ords:
-      for (int ord = 0; ord < segmentCardinality; ord++) {
-        int count = segCounts[ord];
-        if (count != 0) {
-          increment((int) ordMap.get(ord), count);
-        }
+      migrateToGlobalOrds(segmentCardinality, segCounts, ordMap);
+    }
+  }
+
+  private void migrateToGlobalOrds(int segmentCardinality, int[] segCounts, LongValues ordMap) {
+    for (int ord = 0; ord < segmentCardinality; ord++) {
+      int count = segCounts[ord];
+      if (count != 0) {
+        increment((int) ordMap.get(ord), count);
       }
     }
   }
