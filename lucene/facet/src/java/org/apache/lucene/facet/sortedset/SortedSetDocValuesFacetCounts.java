@@ -118,10 +118,11 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     // (distributed faceting).  but this has much higher
     // temp ram req'ts (sum of number of ords across all
     // segs)
+
+    final int[] counts = this.counts;
     if (ordinalMap != null) {
       final LongValues ordMap = ordinalMap.getGlobalOrds(segOrd);
       int numSegOrds = (int) multiValues.getValueCount();
-
       // First count in seg-ord space:
       final int[] segCounts = new int[numSegOrds];
       if (singleValues != null) {
