@@ -91,42 +91,35 @@ public final class DirectMonotonicReader extends LongValues {
   /** Retrieves an instance from the specified slice. */
   public static DirectMonotonicReader getInstance(
       Meta meta, RandomAccessInput data, boolean merging) throws IOException {
-    final LongValues[] readers = new LongValues[meta.numBlocks];
-    for (int i = 0; i < meta.numBlocks; ++i) {
-      if (meta.bpvs[i] == 0) {
-        readers[i] = LongValues.ZEROES;
-      } else if (merging
-          && i < meta.numBlocks - 1 // we only know the number of values for the last block
-          && meta.blockShift >= DirectReader.MERGE_BUFFER_SHIFT) {
-        readers[i] =
-            DirectReader.getMergeInstance(
-                data, meta.bpvs[i], meta.offsets[i], 1L << meta.blockShift);
-      } else {
-        readers[i] = DirectReader.getInstance(data, meta.bpvs[i], meta.offsets[i]);
-      }
-    }
-
-    return new DirectMonotonicReader(meta.blockShift, readers, meta.mins, meta.avgs, meta.bpvs);
+    return new DirectMonotonicReader(
+        data, meta.blockShift, meta.offsets, meta.mins, meta.avgs, meta.bpvs);
   }
 
   private final int blockShift;
   private final long blockMask;
-  private final LongValues[] readers;
+  private final long[] offsets;
   private final long[] mins;
   private final float[] avgs;
   private final byte[] bpvs;
+  private final RandomAccessInput data;
 
   private DirectMonotonicReader(
-      int blockShift, LongValues[] readers, long[] mins, float[] avgs, byte[] bpvs) {
+      RandomAccessInput data,
+      int blockShift,
+      long[] offsets,
+      long[] mins,
+      float[] avgs,
+      byte[] bpvs) {
+    this.data = data;
     this.blockShift = blockShift;
     this.blockMask = (1L << blockShift) - 1;
-    this.readers = readers;
+    this.offsets = offsets;
     this.mins = mins;
     this.avgs = avgs;
     this.bpvs = bpvs;
-    if (readers.length != mins.length
-        || readers.length != avgs.length
-        || readers.length != bpvs.length) {
+    if (offsets.length != mins.length
+        || offsets.length != avgs.length
+        || offsets.length != bpvs.length) {
       throw new IllegalArgumentException();
     }
   }
@@ -135,7 +128,69 @@ public final class DirectMonotonicReader extends LongValues {
   public long get(long index) {
     final int block = (int) (index >>> blockShift);
     final long blockIndex = index & blockMask;
-    final long delta = readers[block].get(blockIndex);
+    final long offset = offsets[block];
+    final long delta;
+    final int bits = bpvs[block];
+    if (bits == 0) {
+      delta = 0;
+    } else {
+      final long readOffset;
+      int shift = 0;
+      long readMask = ((1L << bits) - 1);
+      if (bits == 1) {
+        readOffset = blockIndex >>> 3;
+        shift = (int) (blockIndex & 7);
+      } else if (bits == 2) {
+        readOffset = blockIndex >>> 2;
+        shift = ((int) (blockIndex & 3)) << 1;
+      } else if (bits == 4) {
+        shift = (int) (blockIndex & 1) << 2;
+        readOffset = (blockIndex >>> 1);
+      } else if (bits == 8) {
+        readOffset = blockIndex;
+      } else if (bits == 12) {
+        readOffset = (blockIndex * 12) >>> 3;
+        shift = (int) (blockIndex & 1) << 2;
+      } else if (bits == 16) {
+        readOffset = (blockIndex << 1);
+      } else if (bits == 20) {
+        readOffset = (blockIndex * 20) >>> 3;
+        shift = (int) (blockIndex & 1) << 2;
+      } else if (bits == 24) {
+        readOffset = blockIndex * 3;
+      } else if (bits == 28) {
+        readOffset = (blockIndex * 28) >>> 3;
+        shift = (int) (blockIndex & 1) << 2;
+      } else if (bits == 32) {
+        readOffset = blockIndex << 2;
+      } else if (bits == 40) {
+        readOffset = blockIndex * 5;
+      } else if (bits == 48) {
+        readOffset = blockIndex * 6;
+      } else if (bits == 56) {
+        readOffset = blockIndex * 7;
+      } else {
+        readOffset = blockIndex << 3;
+        readMask = ~0;
+      }
+      final long read;
+      final long readFrom = readOffset + offset;
+      try {
+        if (bits <= 8) {
+          read = data.readByte(readFrom);
+        } else if (bits <= 16) {
+          read = data.readShort(readFrom);
+        } else if (bits <= 32) {
+          read = data.readInt(readFrom);
+        } else {
+          read = data.readLong(readFrom);
+        }
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+      delta = (read >>> shift) & readMask;
+    }
+
     return mins[block] + (long) (avgs[block] * blockIndex) + delta;
   }
 
