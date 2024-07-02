@@ -134,61 +134,7 @@ public final class DirectMonotonicReader extends LongValues {
     if (bits == 0) {
       delta = 0;
     } else {
-      final long readOffset;
-      int shift = 0;
-      long readMask = ((1L << bits) - 1);
-      if (bits == 1) {
-        readOffset = blockIndex >>> 3;
-        shift = (int) (blockIndex & 7);
-      } else if (bits == 2) {
-        readOffset = blockIndex >>> 2;
-        shift = ((int) (blockIndex & 3)) << 1;
-      } else if (bits == 4) {
-        shift = (int) (blockIndex & 1) << 2;
-        readOffset = (blockIndex >>> 1);
-      } else if (bits == 8) {
-        readOffset = blockIndex;
-      } else if (bits == 12) {
-        readOffset = (blockIndex * 12) >>> 3;
-        shift = (int) (blockIndex & 1) << 2;
-      } else if (bits == 16) {
-        readOffset = (blockIndex << 1);
-      } else if (bits == 20) {
-        readOffset = (blockIndex * 20) >>> 3;
-        shift = (int) (blockIndex & 1) << 2;
-      } else if (bits == 24) {
-        readOffset = blockIndex * 3;
-      } else if (bits == 28) {
-        readOffset = (blockIndex * 28) >>> 3;
-        shift = (int) (blockIndex & 1) << 2;
-      } else if (bits == 32) {
-        readOffset = blockIndex << 2;
-      } else if (bits == 40) {
-        readOffset = blockIndex * 5;
-      } else if (bits == 48) {
-        readOffset = blockIndex * 6;
-      } else if (bits == 56) {
-        readOffset = blockIndex * 7;
-      } else {
-        readOffset = blockIndex << 3;
-        readMask = ~0;
-      }
-      final long read;
-      final long readFrom = readOffset + offset;
-      try {
-        if (bits <= 8) {
-          read = data.readByte(readFrom);
-        } else if (bits <= 16) {
-          read = data.readShort(readFrom);
-        } else if (bits <= 32) {
-          read = data.readInt(readFrom);
-        } else {
-          read = data.readLong(readFrom);
-        }
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-      delta = (read >>> shift) & readMask;
+      delta = DirectReader.readDirect(data, bits, blockIndex, offset);
     }
 
     return mins[block] + (long) (avgs[block] * blockIndex) + delta;

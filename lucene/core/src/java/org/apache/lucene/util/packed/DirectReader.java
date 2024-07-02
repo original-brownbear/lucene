@@ -56,38 +56,72 @@ public class DirectReader {
    * bitsPerValue} for each value
    */
   public static LongValues getInstance(RandomAccessInput slice, int bitsPerValue, long offset) {
-    switch (bitsPerValue) {
-      case 1:
-        return new DirectPackedReader1(slice, offset);
-      case 2:
-        return new DirectPackedReader2(slice, offset);
-      case 4:
-        return new DirectPackedReader4(slice, offset);
-      case 8:
-        return new DirectPackedReader8(slice, offset);
-      case 12:
-        return new DirectPackedReader12(slice, offset);
-      case 16:
-        return new DirectPackedReader16(slice, offset);
-      case 20:
-        return new DirectPackedReader20(slice, offset);
-      case 24:
-        return new DirectPackedReader24(slice, offset);
-      case 28:
-        return new DirectPackedReader28(slice, offset);
-      case 32:
-        return new DirectPackedReader32(slice, offset);
-      case 40:
-        return new DirectPackedReader40(slice, offset);
-      case 48:
-        return new DirectPackedReader48(slice, offset);
-      case 56:
-        return new DirectPackedReader56(slice, offset);
-      case 64:
-        return new DirectPackedReader64(slice, offset);
-      default:
-        throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return readDirect(slice, bitsPerValue, index, offset);
+      }
+    };
+  }
+
+  public static long readDirect(RandomAccessInput data, int bits, long blockIndex, long offset) {
+    final long delta;
+    final long readOffset;
+    int shift = 0;
+    long readMask = ((1L << bits) - 1);
+    if (bits == 1) {
+      readOffset = blockIndex >>> 3;
+      shift = (int) (blockIndex & 7);
+    } else if (bits == 2) {
+      readOffset = blockIndex >>> 2;
+      shift = ((int) (blockIndex & 3)) << 1;
+    } else if (bits == 4) {
+      shift = (int) (blockIndex & 1) << 2;
+      readOffset = (blockIndex >>> 1);
+    } else if (bits == 8) {
+      readOffset = blockIndex;
+    } else if (bits == 12) {
+      readOffset = (blockIndex * 12) >>> 3;
+      shift = (int) (blockIndex & 1) << 2;
+    } else if (bits == 16) {
+      readOffset = (blockIndex << 1);
+    } else if (bits == 20) {
+      readOffset = (blockIndex * 20) >>> 3;
+      shift = (int) (blockIndex & 1) << 2;
+    } else if (bits == 24) {
+      readOffset = blockIndex * 3;
+    } else if (bits == 28) {
+      readOffset = (blockIndex * 28) >>> 3;
+      shift = (int) (blockIndex & 1) << 2;
+    } else if (bits == 32) {
+      readOffset = blockIndex << 2;
+    } else if (bits == 40) {
+      readOffset = blockIndex * 5;
+    } else if (bits == 48) {
+      readOffset = blockIndex * 6;
+    } else if (bits == 56) {
+      readOffset = blockIndex * 7;
+    } else {
+      readOffset = blockIndex << 3;
+      readMask = ~0;
     }
+    final long read;
+    final long readFrom = readOffset + offset;
+    try {
+      if (bits <= 8) {
+        read = data.readByte(readFrom);
+      } else if (bits <= 16) {
+        read = data.readShort(readFrom);
+      } else if (bits <= 32) {
+        read = data.readInt(readFrom);
+      } else {
+        read = data.readLong(readFrom);
+      }
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+    delta = (read >>> shift) & readMask;
+    return delta;
   }
 
   /**
@@ -184,280 +218,5 @@ public class DirectReader {
         }
       }
     };
-  }
-
-  static final class DirectPackedReader1 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader1(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        int shift = (int) (index & 7);
-        return (in.readByte(offset + (index >>> 3)) >>> shift) & 0x1;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader2 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader2(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        int shift = ((int) (index & 3)) << 1;
-        return (in.readByte(offset + (index >>> 2)) >>> shift) & 0x3;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader4 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader4(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        int shift = (int) (index & 1) << 2;
-        return (in.readByte(offset + (index >>> 1)) >>> shift) & 0xF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader8 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader8(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readByte(offset + index) & 0xFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader12 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader12(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        long offset = (index * 12) >>> 3;
-        int shift = (int) (index & 1) << 2;
-        return (in.readShort(this.offset + offset) >>> shift) & 0xFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader16 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader16(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readShort(offset + (index << 1)) & 0xFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader20 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader20(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        long offset = (index * 20) >>> 3;
-        int shift = (int) (index & 1) << 2;
-        return (in.readInt(this.offset + offset) >>> shift) & 0xFFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader24 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader24(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readInt(this.offset + index * 3) & 0xFFFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader28 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader28(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        long offset = (index * 28) >>> 3;
-        int shift = (int) (index & 1) << 2;
-        return (in.readInt(this.offset + offset) >>> shift) & 0xFFFFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader32 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader32(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readInt(this.offset + (index << 2)) & 0xFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader40 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader40(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(this.offset + index * 5) & 0xFFFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader48 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader48(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(this.offset + index * 6) & 0xFFFFFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader56 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader56(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(this.offset + index * 7) & 0xFFFFFFFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader64 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader64(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(offset + (index << 3));
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
   }
 }
