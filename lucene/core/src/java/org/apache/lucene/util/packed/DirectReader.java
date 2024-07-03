@@ -264,18 +264,43 @@ public class DirectReader {
    * Retrieves an instance from the specified {@code offset} of the given slice decoding {@code
    * bitsPerValue} for each value
    */
+  /**
+   * Retrieves an instance from the specified {@code offset} of the given slice decoding {@code
+   * bitsPerValue} for each value
+   */
   public static LongValues getInstance(RandomAccessInput slice, int bitsPerValue, long offset) {
-    final var reader = readFunction(bitsPerValue);
-    return new LongValues() {
-      @Override
-      public long get(long index) {
-        try {
-          return reader.read(slice, offset, index);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-    };
+    switch (bitsPerValue) {
+      case 1:
+        return new DirectPackedReader1(slice, offset);
+      case 2:
+        return new DirectPackedReader2(slice, offset);
+      case 4:
+        return new DirectPackedReader4(slice, offset);
+      case 8:
+        return new DirectPackedReader8(slice, offset);
+      case 12:
+        return new DirectPackedReader12(slice, offset);
+      case 16:
+        return new DirectPackedReader16(slice, offset);
+      case 20:
+        return new DirectPackedReader20(slice, offset);
+      case 24:
+        return new DirectPackedReader24(slice, offset);
+      case 28:
+        return new DirectPackedReader28(slice, offset);
+      case 32:
+        return new DirectPackedReader32(slice, offset);
+      case 40:
+        return new DirectPackedReader40(slice, offset);
+      case 48:
+        return new DirectPackedReader48(slice, offset);
+      case 56:
+        return new DirectPackedReader56(slice, offset);
+      case 64:
+        return new DirectPackedReader64(slice, offset);
+      default:
+        throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
+    }
   }
 
   /**
@@ -372,5 +397,271 @@ public class DirectReader {
         }
       }
     };
+  }
+
+  static final class DirectPackedReader1 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader1(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read1(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader2 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader2(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read2(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader4 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader4(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read4(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader8 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader8(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read8(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader12 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader12(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read12(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader16 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader16(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read16(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader20 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader20(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read20(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader24 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader24(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read24(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader28 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader28(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read28(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader32 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader32(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read32(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader40 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader40(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read40(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader48 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader48(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read48(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader56 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader56(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read56(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
+  }
+
+  static final class DirectPackedReader64 extends LongValues {
+    final RandomAccessInput in;
+    final long offset;
+
+    DirectPackedReader64(RandomAccessInput in, long offset) {
+      this.in = in;
+      this.offset = offset;
+    }
+
+    @Override
+    public long get(long index) {
+      try {
+        return read64(in, offset, index);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    }
   }
 }
