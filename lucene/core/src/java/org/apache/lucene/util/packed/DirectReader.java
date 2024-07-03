@@ -43,6 +43,215 @@ public class DirectReader {
   private static final int MERGE_BUFFER_SIZE = 1 << MERGE_BUFFER_SHIFT;
   private static final int MERGE_BUFFER_MASK = MERGE_BUFFER_SIZE - 1;
 
+  /** Reads a long from the given input at given offset and block index. */
+  public abstract static class DirectReadFunction {
+
+    public final byte bitsPerValue;
+
+    protected DirectReadFunction(byte bitsPerValue) {
+      this.bitsPerValue = bitsPerValue;
+    }
+
+    public abstract long read(RandomAccessInput slice, long offset, long index) throws IOException;
+  }
+
+  private static final DirectReadFunction READ_0 =
+      new DirectReadFunction((byte) 0) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) {
+          return 0;
+        }
+      };
+
+  private static final DirectReadFunction READ_1 =
+      new DirectReadFunction((byte) 1) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read1(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_2 =
+      new DirectReadFunction((byte) 2) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read2(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_4 =
+      new DirectReadFunction((byte) 4) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read4(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_8 =
+      new DirectReadFunction((byte) 8) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read8(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_12 =
+      new DirectReadFunction((byte) 12) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read12(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_16 =
+      new DirectReadFunction((byte) 16) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read16(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_20 =
+      new DirectReadFunction((byte) 20) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read20(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_24 =
+      new DirectReadFunction((byte) 24) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read24(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_28 =
+      new DirectReadFunction((byte) 28) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read28(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_32 =
+      new DirectReadFunction((byte) 32) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read32(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_64 =
+      new DirectReadFunction((byte) 64) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read64(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_56 =
+      new DirectReadFunction((byte) 56) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read56(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_48 =
+      new DirectReadFunction((byte) 48) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read48(slice, offset, index);
+        }
+      };
+
+  private static final DirectReadFunction READ_40 =
+      new DirectReadFunction((byte) 40) {
+        @Override
+        public long read(RandomAccessInput slice, long offset, long index) throws IOException {
+          return read40(slice, offset, index);
+        }
+      };
+
+  public static DirectReadFunction readFunction(int bitsPerValue) {
+    return switch (bitsPerValue) {
+      case 0 -> READ_0;
+      case 1 -> READ_1;
+      case 2 -> READ_2;
+      case 4 -> READ_4;
+      case 8 -> READ_8;
+      case 12 -> READ_12;
+      case 16 -> READ_16;
+      case 20 -> READ_20;
+      case 24 -> READ_24;
+      case 28 -> READ_28;
+      case 32 -> READ_32;
+      case 40 -> READ_40;
+      case 48 -> READ_48;
+      case 56 -> READ_56;
+      case 64 -> READ_64;
+      default -> throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
+    };
+  }
+
+  private static long read64(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readLong(offset + (index << 3));
+  }
+
+  private static long read56(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readLong(offset + index * 7) & 0xFFFFFFFFFFFFFFL;
+  }
+
+  private static long read48(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readLong(offset + index * 6) & 0xFFFFFFFFFFFFL;
+  }
+
+  private static long read40(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readLong(offset + index * 5) & 0xFFFFFFFFFFL;
+  }
+
+  private static long read32(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readInt(offset + (index << 2)) & 0xFFFFFFFFL;
+  }
+
+  private static long read28(RandomAccessInput slice, long offset, long index) throws IOException {
+    return (slice.readInt(offset + ((index * 28) >>> 3)) >>> ((int) (index & 1) << 2)) & 0xFFFFFFF;
+  }
+
+  private static long read24(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readInt(offset + index * 3) & 0xFFFFFF;
+  }
+
+  private static long read20(RandomAccessInput slice, long offset, long index) throws IOException {
+    return (slice.readInt(offset + ((index * 20) >>> 3)) >>> ((int) (index & 1) << 2)) & 0xFFFFF;
+  }
+
+  private static long read16(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readShort(offset + (index << 1)) & 0xFFFF;
+  }
+
+  private static long read12(RandomAccessInput slice, long offset, long index) throws IOException {
+    return (slice.readShort(offset + ((index * 12) >>> 3)) >>> ((int) (index & 1) << 2)) & 0xFFF;
+  }
+
+  private static long read8(RandomAccessInput slice, long offset, long index) throws IOException {
+    return slice.readByte(offset + index) & 0xFF;
+  }
+
+  private static long read4(RandomAccessInput slice, long offset, long index) throws IOException {
+    return (slice.readByte(offset + (index >>> 1)) >>> ((int) (index & 1) << 2)) & 0xF;
+  }
+
+  private static long read2(RandomAccessInput slice, long offset, long index) throws IOException {
+    return (slice.readByte(offset + (index >>> 2)) >>> (((int) (index & 3)) << 1)) & 0x3;
+  }
+
+  private static long read1(RandomAccessInput slice, long offset, long index) throws IOException {
+    return (slice.readByte(offset + (index >>> 3)) >>> (int) (index & 7)) & 0x1;
+  }
+
   /**
    * Retrieves an instance from the specified slice written decoding {@code bitsPerValue} for each
    * value
@@ -56,38 +265,17 @@ public class DirectReader {
    * bitsPerValue} for each value
    */
   public static LongValues getInstance(RandomAccessInput slice, int bitsPerValue, long offset) {
-    switch (bitsPerValue) {
-      case 1:
-        return new DirectPackedReader1(slice, offset);
-      case 2:
-        return new DirectPackedReader2(slice, offset);
-      case 4:
-        return new DirectPackedReader4(slice, offset);
-      case 8:
-        return new DirectPackedReader8(slice, offset);
-      case 12:
-        return new DirectPackedReader12(slice, offset);
-      case 16:
-        return new DirectPackedReader16(slice, offset);
-      case 20:
-        return new DirectPackedReader20(slice, offset);
-      case 24:
-        return new DirectPackedReader24(slice, offset);
-      case 28:
-        return new DirectPackedReader28(slice, offset);
-      case 32:
-        return new DirectPackedReader32(slice, offset);
-      case 40:
-        return new DirectPackedReader40(slice, offset);
-      case 48:
-        return new DirectPackedReader48(slice, offset);
-      case 56:
-        return new DirectPackedReader56(slice, offset);
-      case 64:
-        return new DirectPackedReader64(slice, offset);
-      default:
-        throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
-    }
+    final var reader = readFunction(bitsPerValue);
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        try {
+          return reader.read(slice, offset, index);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+    };
   }
 
   /**
@@ -184,280 +372,5 @@ public class DirectReader {
         }
       }
     };
-  }
-
-  static final class DirectPackedReader1 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader1(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        int shift = (int) (index & 7);
-        return (in.readByte(offset + (index >>> 3)) >>> shift) & 0x1;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader2 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader2(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        int shift = ((int) (index & 3)) << 1;
-        return (in.readByte(offset + (index >>> 2)) >>> shift) & 0x3;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader4 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader4(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        int shift = (int) (index & 1) << 2;
-        return (in.readByte(offset + (index >>> 1)) >>> shift) & 0xF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader8 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader8(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readByte(offset + index) & 0xFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader12 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader12(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        long offset = (index * 12) >>> 3;
-        int shift = (int) (index & 1) << 2;
-        return (in.readShort(this.offset + offset) >>> shift) & 0xFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader16 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader16(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readShort(offset + (index << 1)) & 0xFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader20 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader20(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        long offset = (index * 20) >>> 3;
-        int shift = (int) (index & 1) << 2;
-        return (in.readInt(this.offset + offset) >>> shift) & 0xFFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader24 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader24(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readInt(this.offset + index * 3) & 0xFFFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader28 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader28(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        long offset = (index * 28) >>> 3;
-        int shift = (int) (index & 1) << 2;
-        return (in.readInt(this.offset + offset) >>> shift) & 0xFFFFFFF;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader32 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader32(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readInt(this.offset + (index << 2)) & 0xFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader40 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader40(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(this.offset + index * 5) & 0xFFFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader48 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader48(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(this.offset + index * 6) & 0xFFFFFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader56 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader56(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(this.offset + index * 7) & 0xFFFFFFFFFFFFFFL;
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
-  }
-
-  static final class DirectPackedReader64 extends LongValues {
-    final RandomAccessInput in;
-    final long offset;
-
-    DirectPackedReader64(RandomAccessInput in, long offset) {
-      this.in = in;
-      this.offset = offset;
-    }
-
-    @Override
-    public long get(long index) {
-      try {
-        return in.readLong(offset + (index << 3));
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    }
   }
 }

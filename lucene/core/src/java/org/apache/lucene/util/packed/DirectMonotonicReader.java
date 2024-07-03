@@ -91,42 +91,58 @@ public final class DirectMonotonicReader extends LongValues {
   /** Retrieves an instance from the specified slice. */
   public static DirectMonotonicReader getInstance(
       Meta meta, RandomAccessInput data, boolean merging) throws IOException {
-    final LongValues[] readers = new LongValues[meta.numBlocks];
+    final DirectReader.DirectReadFunction[] readers =
+        new DirectReader.DirectReadFunction[meta.numBlocks];
     for (int i = 0; i < meta.numBlocks; ++i) {
-      if (meta.bpvs[i] == 0) {
-        readers[i] = LongValues.ZEROES;
-      } else if (merging
+      if (meta.bpvs[i] != 0
+          && merging
           && i < meta.numBlocks - 1 // we only know the number of values for the last block
           && meta.blockShift >= DirectReader.MERGE_BUFFER_SHIFT) {
-        readers[i] =
+        final LongValues directReader =
             DirectReader.getMergeInstance(
                 data, meta.bpvs[i], meta.offsets[i], 1L << meta.blockShift);
+        final DirectReader.DirectReadFunction reader = DirectReader.readFunction(meta.bpvs[i]);
+        readers[i] =
+            new DirectReader.DirectReadFunction(reader.bitsPerValue) {
+              @Override
+              public long read(RandomAccessInput slice, long offset, long index) {
+                return directReader.get(index);
+              }
+            };
       } else {
-        readers[i] = DirectReader.getInstance(data, meta.bpvs[i], meta.offsets[i]);
+        readers[i] = DirectReader.readFunction(meta.bpvs[i]);
       }
     }
 
-    return new DirectMonotonicReader(meta.blockShift, readers, meta.mins, meta.avgs, meta.bpvs);
+    return new DirectMonotonicReader(
+        data, meta.offsets, meta.blockShift, readers, meta.mins, meta.avgs);
   }
 
   private final int blockShift;
   private final long blockMask;
-  private final LongValues[] readers;
+  private final DirectReader.DirectReadFunction[] readers;
+  private final long[] offsets;
+  private final RandomAccessInput data;
   private final long[] mins;
   private final float[] avgs;
-  private final byte[] bpvs;
 
   private DirectMonotonicReader(
-      int blockShift, LongValues[] readers, long[] mins, float[] avgs, byte[] bpvs) {
+      RandomAccessInput data,
+      long[] offsets,
+      int blockShift,
+      DirectReader.DirectReadFunction[] readers,
+      long[] mins,
+      float[] avgs) {
     this.blockShift = blockShift;
     this.blockMask = (1L << blockShift) - 1;
     this.readers = readers;
+    this.offsets = offsets;
+    this.data = data;
     this.mins = mins;
     this.avgs = avgs;
-    this.bpvs = bpvs;
     if (readers.length != mins.length
         || readers.length != avgs.length
-        || readers.length != bpvs.length) {
+        || offsets.length != readers.length) {
       throw new IllegalArgumentException();
     }
   }
@@ -135,7 +151,12 @@ public final class DirectMonotonicReader extends LongValues {
   public long get(long index) {
     final int block = (int) (index >>> blockShift);
     final long blockIndex = index & blockMask;
-    final long delta = readers[block].get(blockIndex);
+    final long delta;
+    try {
+      delta = readers[block].read(data, offsets[block], blockIndex);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
     return mins[block] + (long) (avgs[block] * blockIndex) + delta;
   }
 
@@ -144,8 +165,9 @@ public final class DirectMonotonicReader extends LongValues {
     final int block = Math.toIntExact(index >>> blockShift);
     final long blockIndex = index & blockMask;
     final long lowerBound = mins[block] + (long) (avgs[block] * blockIndex);
-    final long upperBound = lowerBound + (1L << bpvs[block]) - 1;
-    if (bpvs[block] == 64 || upperBound < lowerBound) { // overflow
+    final byte bpvs = readers[block].bitsPerValue;
+    final long upperBound = lowerBound + (1L << bpvs) - 1;
+    if (bpvs == 64 || upperBound < lowerBound) { // overflow
       return new long[] {Long.MIN_VALUE, Long.MAX_VALUE};
     } else {
       return new long[] {lowerBound, upperBound};
