@@ -35,7 +35,7 @@ class NumericDocValuesWriter extends DocValuesWriter<NumericDocValues> {
   private PackedLongValues finalValues;
   private final Counter iwBytesUsed;
   private long bytesUsed;
-  private DocsWithFieldSet docsWithField;
+  private final DocsWithFieldSet docsWithField;
   private final FieldInfo fieldInfo;
   private int lastDocID = -1;
 

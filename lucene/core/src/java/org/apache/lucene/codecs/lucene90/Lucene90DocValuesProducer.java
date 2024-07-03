@@ -504,13 +504,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     }
   }
 
-  private LongValues getDirectReaderInstance(
-      RandomAccessInput slice, int bitsPerValue, long offset, long numValues) {
-    if (merging) {
-      return DirectReader.getMergeInstance(slice, bitsPerValue, offset, numValues);
-    } else {
-      return DirectReader.getInstance(slice, bitsPerValue, offset);
-    }
+  private DirectReader.DirectReadFunction getDirectReaderInstance(int bitsPerValue) {
+    return DirectReader.readFunction(bitsPerValue);
   }
 
   private NumericDocValues getNumeric(NumericEntry entry) throws IOException {
@@ -545,14 +540,14 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             }
           };
         } else {
-          final LongValues values =
-              getDirectReaderInstance(slice, entry.bitsPerValue, 0L, entry.numValues);
+          final DirectReader.DirectReadFunction values =
+              getDirectReaderInstance(entry.bitsPerValue);
           if (entry.table != null) {
             final long[] table = entry.table;
             return new DenseNumericDocValues(maxDoc) {
               @Override
               public long longValue() throws IOException {
-                return table[(int) values.get(doc)];
+                return table[(int) values.read(slice, 0, doc)];
               }
             };
           } else if (entry.gcd == 1 && entry.minValue == 0) {
@@ -560,7 +555,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             return new DenseNumericDocValues(maxDoc) {
               @Override
               public long longValue() throws IOException {
-                return values.get(doc);
+                return values.read(slice, 0, doc);
               }
             };
           } else {
@@ -569,7 +564,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             return new DenseNumericDocValues(maxDoc) {
               @Override
               public long longValue() throws IOException {
-                return mul * values.get(doc) + delta;
+                return mul * values.read(slice, 0, doc) + delta;
               }
             };
           }
@@ -612,21 +607,21 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             }
           };
         } else {
-          final LongValues values =
-              getDirectReaderInstance(slice, entry.bitsPerValue, 0L, entry.numValues);
+          final DirectReader.DirectReadFunction values =
+              getDirectReaderInstance(entry.bitsPerValue);
           if (entry.table != null) {
             final long[] table = entry.table;
             return new SparseNumericDocValues(disi) {
               @Override
               public long longValue() throws IOException {
-                return table[(int) values.get(disi.index())];
+                return table[(int) values.read(slice, 0, disi.index())];
               }
             };
           } else if (entry.gcd == 1 && entry.minValue == 0) {
             return new SparseNumericDocValues(disi) {
               @Override
               public long longValue() throws IOException {
-                return values.get(disi.index());
+                return values.read(slice, 0, disi.index());
               }
             };
           } else {
@@ -635,7 +630,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             return new SparseNumericDocValues(disi) {
               @Override
               public long longValue() throws IOException {
-                return mul * values.get(disi.index()) + delta;
+                return mul * values.read(slice, 0, disi.index()) + delta;
               }
             };
           }
@@ -674,14 +669,17 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           }
         };
       } else {
-        final LongValues values =
-            getDirectReaderInstance(slice, entry.bitsPerValue, 0L, entry.numValues);
+        final DirectReader.DirectReadFunction values = getDirectReaderInstance(entry.bitsPerValue);
         if (entry.table != null) {
           final long[] table = entry.table;
           return new LongValues() {
             @Override
             public long get(long index) {
-              return table[(int) values.get(index)];
+              try {
+                return table[(int) values.read(slice, 0, index)];
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
             }
           };
         } else if (entry.gcd != 1) {
@@ -690,7 +688,11 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           return new LongValues() {
             @Override
             public long get(long index) {
-              return values.get(index) * gcd + minValue;
+              try {
+                return values.read(slice, 0, index) * gcd + minValue;
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
             }
           };
         } else if (entry.minValue != 0) {
@@ -698,11 +700,24 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           return new LongValues() {
             @Override
             public long get(long index) {
-              return values.get(index) + minValue;
+              try {
+                return values.read(slice, 0, index) + minValue;
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
             }
           };
         } else {
-          return values;
+          return new LongValues() {
+            @Override
+            public long get(long index) {
+              try {
+                return values.read(slice, 0, index);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            }
+          };
         }
       }
     }
@@ -909,8 +924,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       if (slice.length() > 0) {
         slice.prefetch(0, 1);
       }
-      final LongValues values =
-          getDirectReaderInstance(slice, ordsEntry.bitsPerValue, 0L, ordsEntry.numValues);
+      final DirectReader.DirectReadFunction values =
+          getDirectReaderInstance(ordsEntry.bitsPerValue);
 
       if (ordsEntry.docsWithFieldOffset == -1) { // dense
         return new BaseSortedDocValues(entry) {
@@ -920,7 +935,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
           @Override
           public int ordValue() throws IOException {
-            return (int) values.get(doc);
+            return (int) values.read(slice, 0, doc);
           }
 
           @Override
@@ -966,7 +981,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
           @Override
           public int ordValue() throws IOException {
-            return (int) values.get(disi.index());
+            return (int) values.read(slice, 0, disi.index());
           }
 
           @Override
@@ -1539,7 +1554,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       if (slice.length() > 0) {
         slice.prefetch(0, 1);
       }
-      final LongValues values = DirectReader.getInstance(slice, ordsEntry.bitsPerValue);
+      final DirectReader.DirectReadFunction values =
+          DirectReader.readFunction(ordsEntry.bitsPerValue);
 
       if (ordsEntry.docsWithFieldOffset == -1) { // dense
         return new BaseSortedSetDocValues(entry, data) {
@@ -1551,7 +1567,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
           @Override
           public long nextOrd() throws IOException {
-            return values.get(curr++);
+            return values.read(slice, 0, curr++);
           }
 
           @Override
@@ -1613,7 +1629,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           @Override
           public long nextOrd() throws IOException {
             set();
-            return values.get(curr++);
+            return values.read(slice, 0, curr++);
           }
 
           @Override
@@ -1727,7 +1743,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     long delta;
     long offset;
     long blockEndOffset;
-    LongValues values;
+    DirectReader.DirectReadFunction values;
 
     VaryingBPVReader(NumericEntry entry, RandomAccessInput slice) throws IOException {
       this.entry = entry;
@@ -1771,14 +1787,9 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           }
           this.block++;
         } while (this.block != block);
-        final int numValues =
-            Math.toIntExact(Math.min(1 << shift, entry.numValues - (block << shift)));
-        values =
-            bitsPerValue == 0
-                ? LongValues.ZEROES
-                : getDirectReaderInstance(slice, bitsPerValue, offset, numValues);
+        values = DirectReader.readFunction(bitsPerValue);
       }
-      return mul * values.get(index & mask) + delta;
+      return mul * values.read(slice, offset, index & mask) + delta;
     }
   }
 
