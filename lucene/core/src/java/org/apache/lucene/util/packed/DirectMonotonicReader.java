@@ -21,6 +21,7 @@ import java.util.Arrays;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
 import org.apache.lucene.util.LongValues;
+import org.apache.lucene.util.RamUsageEstimator;
 
 /**
  * Retrieves an instance previously written by {@link DirectMonotonicWriter}.
@@ -93,7 +94,9 @@ public final class DirectMonotonicReader extends LongValues {
       Meta meta, RandomAccessInput data, boolean merging) throws IOException {
     final DirectReader.DirectReadFunction[] readers =
         new DirectReader.DirectReadFunction[meta.numBlocks];
+    boolean allOffsetsZero = true;
     for (int i = 0; i < meta.numBlocks; ++i) {
+      allOffsetsZero = allOffsetsZero && meta.offsets[i] == 0;
       if (meta.bpvs[i] != 0
           && merging
           && i < meta.numBlocks - 1 // we only know the number of values for the last block
@@ -114,21 +117,63 @@ public final class DirectMonotonicReader extends LongValues {
       }
     }
 
+    final LongValues offsetValues;
+    if (allOffsetsZero) {
+      offsetValues = LongValues.ZEROES;
+    } else {
+      boolean offsetsAreMultiples = false;
+      if (meta.offsets.length > 0 && meta.offsets[0] == 0) {
+        offsetsAreMultiples = true;
+        for (int i = 1; offsetsAreMultiples && i < meta.offsets.length - 1; i++) {
+          if (meta.offsets[i] - meta.offsets[i - 1] != meta.offsets[i + 1] - meta.offsets[i]) {
+            offsetsAreMultiples = false;
+          }
+        }
+      }
+      if (offsetsAreMultiples) {
+        long multiple = meta.offsets[1];
+        offsetValues =
+            new LongValues() {
+              @Override
+              public long get(long index) {
+                return (int) index * multiple;
+              }
+            };
+      } else {
+        var builder = PackedLongValues.packedBuilder(PackedInts.COMPACT);
+        for (long offset : meta.offsets) {
+          builder.add(offset);
+        }
+        var packed = builder.build();
+        if (packed.ramBytesUsed() < RamUsageEstimator.sizeOf(meta.offsets)) {
+          offsetValues = packed;
+        } else {
+          offsetValues =
+              new LongValues() {
+                @Override
+                public long get(long index) {
+                  return meta.offsets[(int) index];
+                }
+              };
+        }
+      }
+    }
+
     return new DirectMonotonicReader(
-        data, meta.offsets, meta.blockShift, readers, meta.mins, meta.avgs);
+        data, offsetValues, meta.blockShift, readers, meta.mins, meta.avgs);
   }
 
   private final int blockShift;
   private final long blockMask;
   private final DirectReader.DirectReadFunction[] readers;
-  private final long[] offsets;
+  private final LongValues offsets;
   private final RandomAccessInput data;
   private final long[] mins;
   private final float[] avgs;
 
   private DirectMonotonicReader(
       RandomAccessInput data,
-      long[] offsets,
+      LongValues offsets,
       int blockShift,
       DirectReader.DirectReadFunction[] readers,
       long[] mins,
@@ -140,9 +185,7 @@ public final class DirectMonotonicReader extends LongValues {
     this.data = data;
     this.mins = mins;
     this.avgs = avgs;
-    if (readers.length != mins.length
-        || readers.length != avgs.length
-        || offsets.length != readers.length) {
+    if (readers.length != mins.length || readers.length != avgs.length) {
       throw new IllegalArgumentException();
     }
   }
@@ -153,7 +196,7 @@ public final class DirectMonotonicReader extends LongValues {
     final long blockIndex = index & blockMask;
     final long delta;
     try {
-      delta = readers[block].read(data, offsets[block], blockIndex);
+      delta = readers[block].read(data, offsets.get(block), blockIndex);
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
