@@ -131,14 +131,7 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
           segCounts[singleValues.ordValue()]++;
         }
       } else {
-        for (int doc = multiValues.nextDoc();
-            doc != DocIdSetIterator.NO_MORE_DOCS;
-            doc = multiValues.nextDoc()) {
-          for (int i = 0; i < multiValues.docValueCount(); i++) {
-            int term = (int) multiValues.nextOrd();
-            segCounts[term]++;
-          }
-        }
+        countMultiValues(multiValues, multiValues, segCounts);
       }
 
       // Then, migrate to global ords:
@@ -153,20 +146,9 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       // No ord mapping (e.g., single segment index):
       // just aggregate directly into counts:
       if (singleValues != null) {
-        for (int doc = singleValues.nextDoc();
-            doc != DocIdSetIterator.NO_MORE_DOCS;
-            doc = singleValues.nextDoc()) {
-          counts[singleValues.ordValue()]++;
-        }
+        countSingleValues(singleValues, singleValues, counts);
       } else {
-        for (int doc = multiValues.nextDoc();
-            doc != DocIdSetIterator.NO_MORE_DOCS;
-            doc = multiValues.nextDoc()) {
-          for (int i = 0; i < multiValues.docValueCount(); i++) {
-            int term = (int) multiValues.nextOrd();
-            counts[term]++;
-          }
-        }
+        countMultiValues(multiValues, multiValues, counts);
       }
     }
   }
@@ -217,31 +199,17 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       if (hits != null && hits.totalHits < numSegOrds / 10) {
         // Remap every ord to global ord as we iterate:
         if (singleValues != null) {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            counts[(int) ordMap.get(singleValues.ordValue())]++;
-          }
+          countSingleWithOrdMap(it, singleValues, ordMap, counts);
         } else {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            for (int i = 0; i < multiValues.docValueCount(); i++) {
-              int term = (int) multiValues.nextOrd();
-              counts[(int) ordMap.get(term)]++;
-            }
-          }
+          countMultiWithOrdMap(it, multiValues, ordMap, counts);
         }
       } else {
         // First count in seg-ord space:
         final int[] segCounts = new int[numSegOrds];
         if (singleValues != null) {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            segCounts[singleValues.ordValue()]++;
-          }
+          countSingleValues(it, singleValues, segCounts);
         } else {
-          for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-            for (int i = 0; i < multiValues.docValueCount(); i++) {
-              int term = (int) multiValues.nextOrd();
-              segCounts[term]++;
-            }
-          }
+          countMultiValues(it, multiValues, segCounts);
         }
 
         // Then, migrate to global ords:
@@ -257,16 +225,46 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       // No ord mapping (e.g., single segment index):
       // just aggregate directly into counts:
       if (singleValues != null) {
-        for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-          counts[singleValues.ordValue()]++;
-        }
+        countSingleValues(it, singleValues, counts);
       } else {
-        for (int doc = it.nextDoc(); doc != DocIdSetIterator.NO_MORE_DOCS; doc = it.nextDoc()) {
-          for (int i = 0; i < multiValues.docValueCount(); i++) {
-            int term = (int) multiValues.nextOrd();
-            counts[term]++;
-          }
-        }
+        countMultiValues(it, multiValues, counts);
+      }
+    }
+  }
+
+  private void countSingleWithOrdMap(
+      DocIdSetIterator it, SortedDocValues singleValues, LongValues ordMap, int[] counts)
+      throws IOException {
+    while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+      counts[(int) ordMap.get(singleValues.ordValue())]++;
+    }
+  }
+
+  private void countMultiWithOrdMap(
+      DocIdSetIterator it, SortedSetDocValues multiValues, LongValues ordMap, int[] counts)
+      throws IOException {
+    while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+      for (int i = 0; i < multiValues.docValueCount(); i++) {
+        int term = (int) multiValues.nextOrd();
+        counts[(int) ordMap.get(term)]++;
+      }
+    }
+  }
+
+  private static void countSingleValues(
+      DocIdSetIterator it, SortedDocValues singleValues, int[] counts) throws IOException {
+    while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+      counts[singleValues.ordValue()]++;
+    }
+  }
+
+  private static void countMultiValues(
+      DocIdSetIterator it, SortedSetDocValues multiValues, int[] counts) throws IOException {
+    while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
+      final int docValueCount = multiValues.docValueCount();
+      for (int i = 0; i < docValueCount; i++) {
+        int term = (int) multiValues.nextOrd();
+        counts[term]++;
       }
     }
   }
