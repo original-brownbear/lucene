@@ -244,7 +244,8 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       DocIdSetIterator it, SortedSetDocValues multiValues, LongValues ordMap, int[] counts)
       throws IOException {
     while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
-      for (int i = 0; i < multiValues.docValueCount(); i++) {
+      final int docValueCount = multiValues.docValueCount();
+      for (int i = 0; i < docValueCount; i++) {
         int term = (int) multiValues.nextOrd();
         counts[(int) ordMap.get(term)]++;
       }
