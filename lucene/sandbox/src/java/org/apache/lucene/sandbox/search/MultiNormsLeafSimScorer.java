@@ -50,7 +50,7 @@ final class MultiNormsLeafSimScorer {
   }
 
   private final SimScorer scorer;
-  private final NumericDocValues norms;
+  private final MultiFieldNormValues norms;
 
   /** Sole constructor: Score documents of {@code reader} with {@code scorer}. */
   MultiNormsLeafSimScorer(
@@ -93,6 +93,7 @@ final class MultiNormsLeafSimScorer {
   }
 
   private long getNormValue(int doc) throws IOException {
+    var norms = this.norms;
     if (norms != null) {
       boolean found = norms.advanceExact(doc);
       assert found;
@@ -122,55 +123,34 @@ final class MultiNormsLeafSimScorer {
     return scorer.explain(freqExpl, getNormValue(doc));
   }
 
-  private static class MultiFieldNormValues extends NumericDocValues {
+  private static class MultiFieldNormValues {
     private final NumericDocValues[] normsArr;
     private final float[] weightArr;
     private long current;
-    private int docID = -1;
 
     MultiFieldNormValues(NumericDocValues[] normsArr, float[] weightArr) {
       this.normsArr = normsArr;
       this.weightArr = weightArr;
     }
 
-    @Override
-    public long longValue() {
+    long longValue() {
       return current;
     }
 
-    @Override
-    public boolean advanceExact(int target) throws IOException {
+    boolean advanceExact(int target) throws IOException {
       float normValue = 0;
       boolean found = false;
+      var normsArr = this.normsArr;
+      var weightArr = this.weightArr;
       for (int i = 0; i < normsArr.length; i++) {
-        if (normsArr[i].advanceExact(target)) {
-          normValue +=
-              weightArr[i] * LENGTH_TABLE[Byte.toUnsignedInt((byte) normsArr[i].longValue())];
+        var norm = normsArr[i];
+        if (norm.advanceExact(target)) {
+          normValue += weightArr[i] * LENGTH_TABLE[Byte.toUnsignedInt((byte) norm.longValue())];
           found = true;
         }
       }
       current = SmallFloat.intToByte4(Math.round(normValue));
       return found;
-    }
-
-    @Override
-    public int docID() {
-      return docID;
-    }
-
-    @Override
-    public int nextDoc() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public int advance(int target) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public long cost() {
-      throw new UnsupportedOperationException();
     }
   }
 }
