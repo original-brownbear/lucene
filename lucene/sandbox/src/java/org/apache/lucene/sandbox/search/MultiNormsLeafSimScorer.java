@@ -50,7 +50,8 @@ final class MultiNormsLeafSimScorer {
   }
 
   private final SimScorer scorer;
-  private final MultiFieldNormValues norms;
+  private final NumericDocValues[] normsArr;
+  private final float[] weightArr;
 
   /** Sole constructor: Score documents of {@code reader} with {@code scorer}. */
   MultiNormsLeafSimScorer(
@@ -78,29 +79,35 @@ final class MultiNormsLeafSimScorer {
       }
 
       if (normsList.isEmpty()) {
-        norms = null;
+        this.normsArr = null;
+        this.weightArr = null;
       } else {
-        final NumericDocValues[] normsArr = normsList.toArray(new NumericDocValues[0]);
-        final float[] weightArr = new float[normsList.size()];
+        this.normsArr = normsList.toArray(new NumericDocValues[0]);
+        this.weightArr = new float[normsList.size()];
         for (int i = 0; i < weightList.size(); i++) {
           weightArr[i] = weightList.get(i);
         }
-        norms = new MultiFieldNormValues(normsArr, weightArr);
       }
     } else {
-      norms = null;
+      normsArr = null;
+      weightArr = null;
     }
   }
 
   private long getNormValue(int doc) throws IOException {
-    var norms = this.norms;
-    if (norms != null) {
-      boolean found = norms.advanceExact(doc);
-      assert found;
-      return norms.longValue();
-    } else {
-      return 1L; // default norm
+    var normsArr = this.normsArr;
+    if (normsArr == null) {
+      return 1L;
     }
+    float normValue = 0;
+    var weightArr = this.weightArr;
+    for (int i = 0; i < normsArr.length; i++) {
+      var norm = normsArr[i];
+      if (norm.advanceExact(doc)) {
+        normValue += weightArr[i] * LENGTH_TABLE[Byte.toUnsignedInt((byte) norm.longValue())];
+      }
+    }
+    return SmallFloat.intToByte4(Math.round(normValue));
   }
 
   /**
@@ -121,36 +128,5 @@ final class MultiNormsLeafSimScorer {
    */
   public Explanation explain(int doc, Explanation freqExpl) throws IOException {
     return scorer.explain(freqExpl, getNormValue(doc));
-  }
-
-  private static class MultiFieldNormValues {
-    private final NumericDocValues[] normsArr;
-    private final float[] weightArr;
-    private long current;
-
-    MultiFieldNormValues(NumericDocValues[] normsArr, float[] weightArr) {
-      this.normsArr = normsArr;
-      this.weightArr = weightArr;
-    }
-
-    long longValue() {
-      return current;
-    }
-
-    boolean advanceExact(int target) throws IOException {
-      float normValue = 0;
-      boolean found = false;
-      var normsArr = this.normsArr;
-      var weightArr = this.weightArr;
-      for (int i = 0; i < normsArr.length; i++) {
-        var norm = normsArr[i];
-        if (norm.advanceExact(target)) {
-          normValue += weightArr[i] * LENGTH_TABLE[Byte.toUnsignedInt((byte) norm.longValue())];
-          found = true;
-        }
-      }
-      current = SmallFloat.intToByte4(Math.round(normValue));
-      return found;
-    }
   }
 }
