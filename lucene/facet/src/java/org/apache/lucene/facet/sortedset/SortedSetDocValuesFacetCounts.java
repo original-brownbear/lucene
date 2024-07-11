@@ -122,17 +122,21 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
       countNHDL(segCounts, multiValues);
 
       // Then, migrate to global ords:
-      for (int ord = 0; ord < segCounts.length; ord++) {
-        int count = segCounts[ord];
-        if (count != 0) {
-          // ordinalMap.getGlobalOrd(segOrd, ord));
-          counts[(int) ordMap.get(ord)] += count;
-        }
-      }
+      migrateToGlobalOrds(segCounts, counts, ordMap);
     } else {
       // No ord mapping (e.g., single segment index):
       // just aggregate directly into counts:
       countNHDL(counts, multiValues);
+    }
+  }
+
+  private static void migrateToGlobalOrds(int[] segCounts, int[] globalCounts, LongValues ordMap) {
+    for (int ord = 0; ord < segCounts.length; ord++) {
+      int count = segCounts[ord];
+      if (count != 0) {
+        // ordinalMap.getGlobalOrd(segOrd, ord));
+        globalCounts[(int) ordMap.get(ord)] += count;
+      }
     }
   }
 
@@ -203,15 +207,8 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
         final int[] segCounts = new int[numSegOrds];
         countWithoutOrdMapping(singleValues, it, multiValues, segCounts);
 
-        final int[] counts = this.counts;
         // Then, migrate to global ords:
-        for (int ord = 0; ord < segCounts.length; ord++) {
-          int count = segCounts[ord];
-          if (count != 0) {
-            // ordinalMap.getGlobalOrd(segOrd, ord));
-            counts[(int) ordMap.get(ord)] += count;
-          }
-        }
+        migrateToGlobalOrds(segCounts, counts, ordMap);
       }
     } else {
       // No ord mapping (e.g., single segment index):
