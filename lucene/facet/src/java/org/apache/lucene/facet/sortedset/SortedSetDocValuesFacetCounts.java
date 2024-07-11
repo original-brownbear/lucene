@@ -232,7 +232,7 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     }
   }
 
-  private void countSingleWithOrdMap(
+  private static void countSingleWithOrdMap(
       DocIdSetIterator it, SortedDocValues singleValues, LongValues ordMap, int[] counts)
       throws IOException {
     while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
@@ -240,7 +240,7 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     }
   }
 
-  private void countMultiWithOrdMap(
+  private static void countMultiWithOrdMap(
       DocIdSetIterator it, SortedSetDocValues multiValues, LongValues ordMap, int[] counts)
       throws IOException {
     while (it.nextDoc() != DocIdSetIterator.NO_MORE_DOCS) {
