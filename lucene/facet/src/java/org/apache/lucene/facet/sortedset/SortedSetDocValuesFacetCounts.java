@@ -94,6 +94,22 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
   }
 
   // Variant of countOneSegment, that has No Hits or Live Docs
+  private void countOneSegmentNHLDNoOrdinalMap(LeafReader reader) throws IOException {
+    SortedSetDocValues multiValues = DocValues.getSortedSet(reader, field);
+    if (multiValues == null) {
+      // nothing to count
+      return;
+    }
+
+    // Initialize counts:
+    initializeCounts();
+
+    // No ord mapping (e.g., single segment index):
+    // just aggregate directly into counts:
+    countNHDL(counts, multiValues);
+  }
+
+  // Variant of countOneSegment, that has No Hits or Live Docs
   private void countOneSegmentNHLD(OrdinalMap ordinalMap, LeafReader reader, int segOrd)
       throws IOException {
     SortedSetDocValues multiValues = DocValues.getSortedSet(reader, field);
@@ -150,6 +166,28 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     } else {
       countMultiValues(multiValues, segCounts);
     }
+  }
+
+  private void countOneSegmentNoOrdinalMap(LeafReader reader, Bits liveDocs) throws IOException {
+    SortedSetDocValues multiValues = DocValues.getSortedSet(reader, field);
+    if (multiValues == null) {
+      // nothing to count
+      return;
+    }
+
+    // Initialize counts:
+    initializeCounts();
+
+    // It's slightly more efficient to work against SortedDocValues if the field is actually
+    // single-valued (see: LUCENE-5309)
+    SortedDocValues singleValues = DocValues.unwrapSingleton(multiValues);
+    DocIdSetIterator valuesIt = singleValues != null ? singleValues : multiValues;
+
+    assert liveDocs != null;
+    DocIdSetIterator it = FacetUtils.liveDocsDISI(valuesIt, liveDocs);
+    // No ord mapping (e.g., single segment index):
+    // just aggregate directly into counts:
+    countWithoutOrdMapping(singleValues, it, multiValues, counts);
   }
 
   private void countOneSegment(
@@ -320,26 +358,29 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
 
   /** Does all the "real work" of tallying up the counts. */
   private void countAll() throws IOException {
-
-    OrdinalMap ordinalMap;
-
     // TODO: is this right?  really, we need a way to
     // verify that this ordinalMap "matches" the leaves in
     // matchingDocs...
     if (dv instanceof MultiDocValues.MultiSortedSetDocValues multiSortedSetDocValues) {
-      ordinalMap = multiSortedSetDocValues.mapping;
+      OrdinalMap ordinalMap = multiSortedSetDocValues.mapping;
+      for (LeafReaderContext context : state.getReader().leaves()) {
+        var reader = context.reader();
+        Bits liveDocs = reader.getLiveDocs();
+        if (liveDocs == null) {
+          countOneSegmentNHLD(ordinalMap, reader, context.ord);
+        } else {
+          countOneSegment(ordinalMap, reader, context.ord, null, liveDocs);
+        }
+      }
     } else {
-      ordinalMap = null;
-    }
-
-    for (LeafReaderContext context : state.getReader().leaves()) {
-
-      var reader = context.reader();
-      Bits liveDocs = reader.getLiveDocs();
-      if (liveDocs == null) {
-        countOneSegmentNHLD(ordinalMap, reader, context.ord);
-      } else {
-        countOneSegment(ordinalMap, reader, context.ord, null, liveDocs);
+      for (LeafReaderContext context : state.getReader().leaves()) {
+        var reader = context.reader();
+        Bits liveDocs = reader.getLiveDocs();
+        if (liveDocs == null) {
+          countOneSegmentNHLDNoOrdinalMap(reader);
+        } else {
+          countOneSegmentNoOrdinalMap(reader, liveDocs);
+        }
       }
     }
   }
