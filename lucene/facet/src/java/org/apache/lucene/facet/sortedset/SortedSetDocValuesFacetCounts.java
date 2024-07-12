@@ -304,16 +304,17 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
 
     for (MatchingDocs hits : matchingDocs) {
 
+      var context = hits.context;
       // LUCENE-5090: make sure the provided reader context "matches"
       // the top-level reader passed to the
       // SortedSetDocValuesReaderState, else cryptic
       // AIOOBE can happen:
-      if (ReaderUtil.getTopLevelContext(hits.context).reader() != reader) {
+      if (ReaderUtil.getTopLevelContext(context).reader() != reader) {
         throw new IllegalStateException(
             "the SortedSetDocValuesReaderState provided to this class does not match the reader being searched; you must create a new SortedSetDocValuesReaderState every time you open a new IndexReader");
       }
 
-      countOneSegment(ordinalMap, hits.context.reader(), hits.context.ord, hits, null);
+      countOneSegment(ordinalMap, context.reader(), context.ord, hits, null);
     }
   }
 
@@ -325,19 +326,20 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     // TODO: is this right?  really, we need a way to
     // verify that this ordinalMap "matches" the leaves in
     // matchingDocs...
-    if (dv instanceof MultiDocValues.MultiSortedSetDocValues) {
-      ordinalMap = ((MultiSortedSetDocValues) dv).mapping;
+    if (dv instanceof MultiDocValues.MultiSortedSetDocValues multiSortedSetDocValues) {
+      ordinalMap = multiSortedSetDocValues.mapping;
     } else {
       ordinalMap = null;
     }
 
     for (LeafReaderContext context : state.getReader().leaves()) {
 
-      Bits liveDocs = context.reader().getLiveDocs();
+      var reader = context.reader();
+      Bits liveDocs = reader.getLiveDocs();
       if (liveDocs == null) {
-        countOneSegmentNHLD(ordinalMap, context.reader(), context.ord);
+        countOneSegmentNHLD(ordinalMap, reader, context.ord);
       } else {
-        countOneSegment(ordinalMap, context.reader(), context.ord, null, liveDocs);
+        countOneSegment(ordinalMap, reader, context.ord, null, liveDocs);
       }
     }
   }
