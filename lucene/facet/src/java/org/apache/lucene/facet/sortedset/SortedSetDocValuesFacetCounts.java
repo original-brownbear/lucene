@@ -28,7 +28,6 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.LeafReader;
 import org.apache.lucene.index.LeafReaderContext;
 import org.apache.lucene.index.MultiDocValues;
-import org.apache.lucene.index.MultiDocValues.MultiSortedSetDocValues;
 import org.apache.lucene.index.OrdinalMap;
 import org.apache.lucene.index.ReaderUtil;
 import org.apache.lucene.index.SortedDocValues;
@@ -190,10 +189,55 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     countWithoutOrdMapping(singleValues, it, multiValues, counts);
   }
 
-  private void countOneSegment(
-      OrdinalMap ordinalMap, LeafReader reader, int segOrd, MatchingDocs hits, Bits liveDocs)
+  private void countOneSegmentNoHits(
+      OrdinalMap ordinalMap, LeafReader reader, int segOrd, Bits liveDocs) throws IOException {
+
+    SortedSetDocValues multiValues = DocValues.getSortedSet(reader, field);
+    if (multiValues == null) {
+      // nothing to count
+      return;
+    }
+
+    // Initialize counts:
+    initializeCounts();
+
+    // It's slightly more efficient to work against SortedDocValues if the field is actually
+    // single-valued (see: LUCENE-5309)
+    SortedDocValues singleValues = DocValues.unwrapSingleton(multiValues);
+    DocIdSetIterator valuesIt = singleValues != null ? singleValues : multiValues;
+
+    assert liveDocs != null;
+    DocIdSetIterator it = FacetUtils.liveDocsDISI(valuesIt, liveDocs);
+
+    // TODO: yet another option is to count all segs
+    // first, only in seg-ord space, and then do a
+    // merge-sort-PQ in the end to only "resolve to
+    // global" those seg ords that can compete, if we know
+    // we just want top K?  ie, this is the same algo
+    // that'd be used for merging facets across shards
+    // (distributed faceting).  but this has much higher
+    // temp ram req'ts (sum of number of ords across all
+    // segs)
+    final LongValues ordMap;
+    if (ordinalMap != null && (ordMap = ordinalMap.getGlobalOrds(segOrd)) != LongValues.IDENTITY) {
+      int numSegOrds = (int) multiValues.getValueCount();
+      // First count in seg-ord space:
+      final int[] segCounts = new int[numSegOrds];
+      countWithoutOrdMapping(singleValues, it, multiValues, segCounts);
+
+      // Then, migrate to global ords:
+      migrateToGlobalOrds(segCounts, counts, ordMap);
+    } else {
+      // No ord mapping (e.g., single segment index):
+      // just aggregate directly into counts:
+      countWithoutOrdMapping(singleValues, it, multiValues, counts);
+    }
+  }
+
+  private void countOneSegmentNoOrdinalMap(LeafReader reader, MatchingDocs hits)
       throws IOException {
-    if (hits != null && hits.totalHits == 0) {
+    final int totalHits = hits.totalHits;
+    if (totalHits == 0) {
       return;
     }
 
@@ -211,13 +255,46 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     SortedDocValues singleValues = DocValues.unwrapSingleton(multiValues);
     DocIdSetIterator valuesIt = singleValues != null ? singleValues : multiValues;
 
-    DocIdSetIterator it;
-    if (hits == null) {
-      assert liveDocs != null;
-      it = FacetUtils.liveDocsDISI(valuesIt, liveDocs);
-    } else {
-      it = ConjunctionUtils.intersectIterators(Arrays.asList(hits.bits.iterator(), valuesIt));
+    DocIdSetIterator it =
+        ConjunctionUtils.intersectIterators(Arrays.asList(hits.bits.iterator(), valuesIt));
+
+    // TODO: yet another option is to count all segs
+    // first, only in seg-ord space, and then do a
+    // merge-sort-PQ in the end to only "resolve to
+    // global" those seg ords that can compete, if we know
+    // we just want top K?  ie, this is the same algo
+    // that'd be used for merging facets across shards
+    // (distributed faceting).  but this has much higher
+    // temp ram req'ts (sum of number of ords across all
+    // segs)
+    // No ord mapping (e.g., single segment index):
+    // just aggregate directly into counts:
+    countWithoutOrdMapping(singleValues, it, multiValues, counts);
+  }
+
+  private void countOneSegment(
+      OrdinalMap ordinalMap, LeafReader reader, int segOrd, MatchingDocs hits) throws IOException {
+    final int totalHits = hits.totalHits;
+    if (totalHits == 0) {
+      return;
     }
+
+    SortedSetDocValues multiValues = DocValues.getSortedSet(reader, field);
+    if (multiValues == null) {
+      // nothing to count
+      return;
+    }
+
+    // Initialize counts:
+    initializeCounts();
+
+    // It's slightly more efficient to work against SortedDocValues if the field is actually
+    // single-valued (see: LUCENE-5309)
+    SortedDocValues singleValues = DocValues.unwrapSingleton(multiValues);
+    DocIdSetIterator valuesIt = singleValues != null ? singleValues : multiValues;
+
+    DocIdSetIterator it =
+        ConjunctionUtils.intersectIterators(Arrays.asList(hits.bits.iterator(), valuesIt));
 
     // TODO: yet another option is to count all segs
     // first, only in seg-ord space, and then do a
@@ -230,10 +307,8 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
     // segs)
     final LongValues ordMap;
     if (ordinalMap != null && (ordMap = ordinalMap.getGlobalOrds(segOrd)) != LongValues.IDENTITY) {
-
       int numSegOrds = (int) multiValues.getValueCount();
-
-      if (hits != null && hits.totalHits < numSegOrds / 10) {
+      if (totalHits < numSegOrds / 10) {
         // Remap every ord to global ord as we iterate:
         if (singleValues != null) {
           countSingleWithOrdMap(it, singleValues, ordMap, counts);
@@ -327,32 +402,40 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
   /** Does all the "real work" of tallying up the counts. */
   private void count(List<MatchingDocs> matchingDocs) throws IOException {
 
-    OrdinalMap ordinalMap;
+    IndexReader reader = state.getReader();
 
     // TODO: is this right?  really, we need a way to
     // verify that this ordinalMap "matches" the leaves in
     // matchingDocs...
-    if (dv instanceof MultiDocValues.MultiSortedSetDocValues && matchingDocs.size() > 1) {
-      ordinalMap = ((MultiSortedSetDocValues) dv).mapping;
-    } else {
-      ordinalMap = null;
-    }
-
-    IndexReader reader = state.getReader();
-
-    for (MatchingDocs hits : matchingDocs) {
-
-      var context = hits.context;
-      // LUCENE-5090: make sure the provided reader context "matches"
-      // the top-level reader passed to the
-      // SortedSetDocValuesReaderState, else cryptic
-      // AIOOBE can happen:
-      if (ReaderUtil.getTopLevelContext(context).reader() != reader) {
-        throw new IllegalStateException(
-            "the SortedSetDocValuesReaderState provided to this class does not match the reader being searched; you must create a new SortedSetDocValuesReaderState every time you open a new IndexReader");
+    if (dv instanceof MultiDocValues.MultiSortedSetDocValues multiSortedSetDocValues
+        && matchingDocs.size() > 1) {
+      final OrdinalMap ordinalMap = multiSortedSetDocValues.mapping;
+      for (MatchingDocs hits : matchingDocs) {
+        var context = hits.context;
+        // LUCENE-5090: make sure the provided reader context "matches"
+        // the top-level reader passed to the
+        // SortedSetDocValuesReaderState, else cryptic
+        // AIOOBE can happen:
+        ensureReaderMatchesTopLevel(context, reader);
+        countOneSegment(ordinalMap, context.reader(), context.ord, hits);
       }
+    } else {
+      for (MatchingDocs hits : matchingDocs) {
+        var context = hits.context;
+        ensureReaderMatchesTopLevel(context, reader);
+        countOneSegmentNoOrdinalMap(context.reader(), hits);
+      }
+    }
+  }
 
-      countOneSegment(ordinalMap, context.reader(), context.ord, hits, null);
+  private static void ensureReaderMatchesTopLevel(LeafReaderContext context, IndexReader reader) {
+    // LUCENE-5090: make sure the provided reader context "matches"
+    // the top-level reader passed to the
+    // SortedSetDocValuesReaderState, else cryptic
+    // AIOOBE can happen:
+    if (ReaderUtil.getTopLevelContext(context).reader() != reader) {
+      throw new IllegalStateException(
+          "the SortedSetDocValuesReaderState provided to this class does not match the reader being searched; you must create a new SortedSetDocValuesReaderState every time you open a new IndexReader");
     }
   }
 
@@ -369,7 +452,7 @@ public class SortedSetDocValuesFacetCounts extends AbstractSortedSetDocValueFace
         if (liveDocs == null) {
           countOneSegmentNHLD(ordinalMap, reader, context.ord);
         } else {
-          countOneSegment(ordinalMap, reader, context.ord, null, liveDocs);
+          countOneSegmentNoHits(ordinalMap, reader, context.ord, liveDocs);
         }
       }
     } else {
