@@ -122,7 +122,11 @@ public final class TaskExecutor {
           wait for them to finish instead of throwing CancellationException. A cleaner way would have been to override FutureTask#get and
           make it wait for cancelled tasks, but FutureTask#awaitDone is private. Tasks that are cancelled before they are started will be no-op.
            */
-          return startedOrCancelled.compareAndSet(false, true);
+          if (startedOrCancelled.compareAndSet(false, true)) {
+            set(null);
+            return true;
+          }
+          return false;
         }
       };
     }
@@ -133,30 +137,33 @@ public final class TaskExecutor {
       final AtomicInteger taskId = new AtomicInteger(0);
       // we fork execution count - 1 tasks to execute at least one task on the current thread to
       // minimize needless forking and blocking of the current thread
-      if (count > 1) {
-        final Runnable work =
-            () -> {
+
+      final Runnable work =
+          new Runnable() {
+            @Override
+            public void run() {
+              // try to execute as many tasks as possible on the current thread to minimize context
+              // switching in case of long running concurrent
+              // tasks as well as dead-locking if the current thread is part of #executor for
+              // executors that have limited or no parallelism
               int id = taskId.getAndIncrement();
-              if (id < count) {
-                futures.get(id).run();
+              if (id < count - 1) {
+                executor.execute(this);
+              } else if (id > count - 1) {
+                return;
               }
-            };
-        for (int j = 0; j < count - 1; j++) {
-          executor.execute(work);
-        }
-      }
-      // try to execute as many tasks as possible on the current thread to minimize context
-      // switching in case of long running concurrent
-      // tasks as well as dead-locking if the current thread is part of #executor for executors that
-      // have limited or no parallelism
-      int id;
-      while ((id = taskId.getAndIncrement()) < count) {
-        futures.get(id).run();
-        if (id >= count - 1) {
-          // save redundant CAS in case this was the last task
-          break;
-        }
-      }
+              do {
+                futures.get(id).run();
+                if (id >= count - 1) {
+                  // save redundant CAS in case this was the last task
+                  break;
+                }
+                id = taskId.getAndIncrement();
+              } while (id < count);
+            }
+          };
+      work.run();
+
       Throwable exc = null;
       List<T> results = new ArrayList<>(count);
       for (int i = 0; i < count; i++) {
