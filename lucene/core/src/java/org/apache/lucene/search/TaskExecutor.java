@@ -66,6 +66,13 @@ public final class TaskExecutor {
    * @param <T> the return type of the task execution
    */
   public <T> List<T> invokeAll(Collection<Callable<T>> callables) throws IOException {
+    if (callables.size() == 1) {
+      try {
+        return Collections.singletonList(callables.iterator().next().call());
+      } catch (Exception e) {
+        throw IOUtils.rethrowAlways(e);
+      }
+    }
     TaskGroup<T> taskGroup = new TaskGroup<>(callables);
     return taskGroup.invokeAll(executor);
   }
@@ -122,7 +129,11 @@ public final class TaskExecutor {
           wait for them to finish instead of throwing CancellationException. A cleaner way would have been to override FutureTask#get and
           make it wait for cancelled tasks, but FutureTask#awaitDone is private. Tasks that are cancelled before they are started will be no-op.
            */
-          return startedOrCancelled.compareAndSet(false, true);
+          if (startedOrCancelled.compareAndSet(false, true)) {
+            set(null);
+            return true;
+          }
+          return false;
         }
       };
     }
@@ -133,17 +144,15 @@ public final class TaskExecutor {
       final AtomicInteger taskId = new AtomicInteger(0);
       // we fork execution count - 1 tasks to execute at least one task on the current thread to
       // minimize needless forking and blocking of the current thread
-      if (count > 1) {
-        final Runnable work =
-            () -> {
-              int id = taskId.getAndIncrement();
-              if (id < count) {
-                futures.get(id).run();
-              }
-            };
-        for (int j = 0; j < count - 1; j++) {
-          executor.execute(work);
-        }
+      final Runnable work =
+          () -> {
+            int id = taskId.getAndIncrement();
+            if (id < count) {
+              futures.get(id).run();
+            }
+          };
+      for (int j = 0; j < count - 1; j++) {
+        executor.execute(work);
       }
       // try to execute as many tasks as possible on the current thread to minimize context
       // switching in case of long running concurrent
