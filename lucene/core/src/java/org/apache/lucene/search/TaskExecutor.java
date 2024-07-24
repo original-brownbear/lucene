@@ -145,42 +145,33 @@ public final class TaskExecutor {
     List<T> invokeAll(Executor executor) throws IOException {
       final int count = futures.size();
       // taskId provides the first index of an un-executed task in #futures
-      final AtomicInteger taskId = new AtomicInteger(1);
+      final AtomicInteger taskId = new AtomicInteger(0);
       // we fork execution count - 1 tasks to execute at least one task on the current thread to
       // minimize needless forking and blocking of the current thread
       final Runnable work =
           () -> {
-            int id;
-            while ((id = taskId.get()) < count) {
-              if (taskId.weakCompareAndSetPlain(id, id + 1)) {
-                futures.get(id).run();
-                if (id >= count - 1) {
-                  // save redundant CAS in case this was the last task
-                  break;
-                }
-              }
+            int id = taskId.getAndIncrement();
+            if (id < count) {
+              futures.get(id).run();
             }
           };
-      for (int j = 1; j < count; j = Math.max(j + 1, taskId.get())) {
+      for (int j = 0; j < count - 1; j++) {
         executor.execute(work);
       }
       // try to execute as many tasks as possible on the current thread to minimize context
       // switching in case of long running concurrent
       // tasks as well as dead-locking if the current thread is part of #executor for executors that
       // have limited or no parallelism
-      futures.getFirst().run();
       int id;
-      while ((id = taskId.get()) < count) {
-        if (taskId.weakCompareAndSetPlain(id, id + 1)) {
-          futures.get(id).run();
-          if (id >= count - 1) {
-            // save redundant CAS in case this was the last task
-            break;
-          }
+      while ((id = taskId.getAndIncrement()) < count) {
+        futures.get(id).run();
+        if (id >= count - 1) {
+          // save redundant CAS in case this was the last task
+          break;
         }
       }
-      List<T> results = new ArrayList<>(count);
       Throwable exc = null;
+      List<T> results = new ArrayList<>(count);
       for (int i = 0; i < count; i++) {
         Future<T> future = futures.get(i);
         try {
