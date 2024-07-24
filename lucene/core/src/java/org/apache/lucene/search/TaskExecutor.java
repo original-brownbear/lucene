@@ -134,7 +134,7 @@ public final class TaskExecutor {
     List<T> invokeAll(Executor executor) throws IOException {
       final int count = futures.size();
       // taskId provides the first index of an un-executed task in #futures
-      final AtomicInteger taskId = new AtomicInteger(0);
+      final AtomicInteger taskId = new AtomicInteger(1);
       // we fork execution count - 1 tasks to execute at least one task on the current thread to
       // minimize needless forking and blocking of the current thread
       if (count > 1) {
@@ -157,14 +157,14 @@ public final class TaskExecutor {
       // switching in case of long running concurrent
       // tasks as well as dead-locking if the current thread is part of #executor for executors that
       // have limited or no parallelism
-      int id;
-      while ((id = taskId.getAndIncrement()) < count) {
+      int id = 0;
+      do {
         futures.get(id).run();
         if (id >= count - 1) {
           // save redundant CAS in case this was the last task
           break;
         }
-      }
+      } while ((id = taskId.getAndIncrement()) < count);
       Throwable exc = null;
       List<T> results = new ArrayList<>(count);
       for (int i = 0; i < count; i++) {
