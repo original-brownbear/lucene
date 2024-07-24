@@ -154,11 +154,14 @@ public final class TaskExecutor {
             while ((id = taskId.get()) < count) {
               if (taskId.weakCompareAndSetPlain(id, id + 1)) {
                 futures.get(id).run();
-                return;
+                if (id >= count - 1) {
+                  // save redundant CAS in case this was the last task
+                  break;
+                }
               }
             }
           };
-      for (int j = 0; j < count - 1; j++) {
+      for (int j = 1; j < count; j = Math.max(j + 1, taskId.get())) {
         executor.execute(work);
       }
       // try to execute as many tasks as possible on the current thread to minimize context
@@ -180,18 +183,12 @@ public final class TaskExecutor {
       Throwable exc = null;
       for (int i = 0; i < count; i++) {
         Future<T> future = futures.get(i);
-        switch (future.state()) {
-          case SUCCESS -> results.add(future.resultNow());
-          case FAILED, CANCELLED -> exc = IOUtils.useOrSuppress(exc, future.exceptionNow());
-          case RUNNING -> {
-            try {
-              results.add(future.get());
-            } catch (InterruptedException e) {
-              exc = IOUtils.useOrSuppress(exc, new ThreadInterruptedException(e));
-            } catch (ExecutionException e) {
-              exc = IOUtils.useOrSuppress(exc, e.getCause());
-            }
-          }
+        try {
+          results.add(future.get());
+        } catch (InterruptedException e) {
+          exc = IOUtils.useOrSuppress(exc, new ThreadInterruptedException(e));
+        } catch (ExecutionException e) {
+          exc = IOUtils.useOrSuppress(exc, e.getCause());
         }
       }
       assert assertAllFuturesCompleted() : "Some tasks are still running?";
