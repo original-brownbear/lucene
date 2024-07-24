@@ -66,11 +66,7 @@ public final class TaskExecutor {
    * @param <T> the return type of the task execution
    */
   public <T> List<T> invokeAll(Collection<Callable<T>> callables) throws IOException {
-    int count = callables.size();
-    if (count == 0) {
-      return Collections.emptyList();
-    }
-    if (count == 1) {
+    if (callables.size() == 1) {
       try {
         return Collections.singletonList(callables.iterator().next().call());
       } catch (Exception e) {
@@ -107,21 +103,24 @@ public final class TaskExecutor {
     }
 
     RunnableFuture<T> createTask(Callable<T> callable) {
-      AtomicBoolean startedOrCancelled = new AtomicBoolean(false);
-      return new FutureTask<>(
-          () -> {
-            if (startedOrCancelled.compareAndSet(false, true)) {
-              try {
-                return callable.call();
-              } catch (Throwable t) {
-                cancelAll();
-                throw t;
-              }
-            }
-            // task is cancelled hence it has no results to return. That's fine: they would be
-            // ignored anyway.
-            return null;
-          }) {
+      return new FutureTask<>(callable) {
+        private final AtomicBoolean startedOrCancelled = new AtomicBoolean(false);
+
+        @Override
+        protected void setException(Throwable t) {
+          super.setException(t);
+          for (Future<T> future : futures) {
+            future.cancel(false);
+          }
+        }
+
+        @Override
+        public void run() {
+          if (startedOrCancelled.compareAndSet(false, true)) {
+            super.run();
+          }
+        }
+
         @Override
         public boolean cancel(boolean mayInterruptIfRunning) {
           assert mayInterruptIfRunning == false
@@ -134,6 +133,8 @@ public final class TaskExecutor {
           make it wait for cancelled tasks, but FutureTask#awaitDone is private. Tasks that are cancelled before they are started will be no-op.
            */
           if (startedOrCancelled.compareAndSet(false, true)) {
+            // task is cancelled hence it has no results to return. That's fine: they would be
+            // ignored anyway.
             set(null);
             return true;
           }
@@ -196,12 +197,6 @@ public final class TaskExecutor {
         }
       }
       return true;
-    }
-
-    private void cancelAll() {
-      for (Future<T> future : futures) {
-        future.cancel(false);
-      }
     }
   }
 }
