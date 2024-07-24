@@ -103,7 +103,7 @@ public final class TaskExecutor {
       for (Callable<T> callable : callables) {
         tasks.add(createTask(callable));
       }
-      this.futures = Collections.unmodifiableList(tasks);
+      this.futures = tasks;
     }
 
     RunnableFuture<T> createTask(Callable<T> callable) {
@@ -150,9 +150,12 @@ public final class TaskExecutor {
       // minimize needless forking and blocking of the current thread
       final Runnable work =
           () -> {
-            int id = taskId.getAndIncrement();
-            if (id < count) {
-              futures.get(id).run();
+            int id;
+            while ((id = taskId.get()) < count) {
+              if (taskId.weakCompareAndSetPlain(id, id + 1)) {
+                futures.get(id).run();
+                return;
+              }
             }
           };
       for (int j = 0; j < count - 1; j++) {
@@ -162,24 +165,33 @@ public final class TaskExecutor {
       // switching in case of long running concurrent
       // tasks as well as dead-locking if the current thread is part of #executor for executors that
       // have limited or no parallelism
-      int id = 0;
-      do {
-        futures.get(id).run();
-        if (id >= count - 1) {
-          // save redundant CAS in case this was the last task
-          break;
+      futures.getFirst().run();
+      int id;
+      while ((id = taskId.get()) < count) {
+        if (taskId.weakCompareAndSetPlain(id, id + 1)) {
+          futures.get(id).run();
+          if (id >= count - 1) {
+            // save redundant CAS in case this was the last task
+            break;
+          }
         }
-      } while ((id = taskId.getAndIncrement()) < count);
-      Throwable exc = null;
+      }
       List<T> results = new ArrayList<>(count);
+      Throwable exc = null;
       for (int i = 0; i < count; i++) {
         Future<T> future = futures.get(i);
-        try {
-          results.add(future.get());
-        } catch (InterruptedException e) {
-          exc = IOUtils.useOrSuppress(exc, new ThreadInterruptedException(e));
-        } catch (ExecutionException e) {
-          exc = IOUtils.useOrSuppress(exc, e.getCause());
+        switch (future.state()) {
+          case SUCCESS -> results.add(future.resultNow());
+          case FAILED, CANCELLED -> exc = IOUtils.useOrSuppress(exc, future.exceptionNow());
+          case RUNNING -> {
+            try {
+              results.add(future.get());
+            } catch (InterruptedException e) {
+              exc = IOUtils.useOrSuppress(exc, new ThreadInterruptedException(e));
+            } catch (ExecutionException e) {
+              exc = IOUtils.useOrSuppress(exc, e.getCause());
+            }
+          }
         }
       }
       assert assertAllFuturesCompleted() : "Some tasks are still running?";
