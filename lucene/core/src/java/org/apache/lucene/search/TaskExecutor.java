@@ -66,6 +66,17 @@ public final class TaskExecutor {
    * @param <T> the return type of the task execution
    */
   public <T> List<T> invokeAll(Collection<Callable<T>> callables) throws IOException {
+    int count = callables.size();
+    if (count == 0) {
+      return Collections.emptyList();
+    }
+    if (count == 1) {
+      try {
+        return Collections.singletonList(callables.iterator().next().call());
+      } catch (Exception e) {
+        throw IOUtils.rethrowAlways(e);
+      }
+    }
     TaskGroup<T> taskGroup = new TaskGroup<>(callables);
     return taskGroup.invokeAll(executor);
   }
@@ -137,21 +148,15 @@ public final class TaskExecutor {
       final AtomicInteger taskId = new AtomicInteger(1);
       // we fork execution count - 1 tasks to execute at least one task on the current thread to
       // minimize needless forking and blocking of the current thread
-      if (count > 1) {
-        executor.execute(
-            () -> {
-              final Runnable work =
-                  () -> {
-                    int id = taskId.getAndIncrement();
-                    if (id < count) {
-                      futures.get(id).run();
-                    }
-                  };
-              for (int j = taskId.get(); j < count - 2; j = Math.max(j + 1, taskId.get())) {
-                executor.execute(work);
-              }
-              work.run();
-            });
+      final Runnable work =
+          () -> {
+            int id = taskId.getAndIncrement();
+            if (id < count) {
+              futures.get(id).run();
+            }
+          };
+      for (int j = 0; j < count - 1; j++) {
+        executor.execute(work);
       }
       // try to execute as many tasks as possible on the current thread to minimize context
       // switching in case of long running concurrent
