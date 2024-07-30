@@ -92,14 +92,16 @@ public final class TaskExecutor {
    * @param <T> the return type of all the callables
    */
   private static final class TaskGroup<T> {
-    private final List<RunnableFuture<T>> futures;
+    private final RunnableFuture<T>[] futures;
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     TaskGroup(Collection<Callable<T>> callables) {
-      List<RunnableFuture<T>> tasks = new ArrayList<>(callables.size());
+      RunnableFuture<T>[] tasks = new RunnableFuture[callables.size()];
+      int i = 0;
       for (Callable<T> callable : callables) {
-        tasks.add(createTask(callable));
+        tasks[i++] = createTask(callable);
       }
-      this.futures = Collections.unmodifiableList(tasks);
+      this.futures = tasks;
     }
 
     RunnableFuture<T> createTask(Callable<T> callable) {
@@ -135,39 +137,35 @@ public final class TaskExecutor {
     }
 
     List<T> invokeAll(Executor executor) throws IOException {
-      final int count = futures.size();
       // taskId provides the first index of an un-executed task in #futures
       final AtomicInteger taskId = new AtomicInteger(0);
       // we fork execution count - 1 tasks to execute at least one task on the current thread to
       // minimize needless forking and blocking of the current thread
-      if (count > 1) {
-        final Runnable work =
-            () -> {
-              int id = taskId.getAndIncrement();
-              if (id < count) {
-                futures.get(id).run();
-              }
-            };
-        for (int j = 0; j < count - 1; j++) {
-          executor.execute(work);
-        }
+      final Runnable work =
+          () -> {
+            int id = taskId.getAndIncrement();
+            if (id < futures.length) {
+              futures[id].run();
+            }
+          };
+      for (int j = 0; j < futures.length - 1; j++) {
+        executor.execute(work);
       }
       // try to execute as many tasks as possible on the current thread to minimize context
       // switching in case of long running concurrent
       // tasks as well as dead-locking if the current thread is part of #executor for executors that
       // have limited or no parallelism
       int id;
-      while ((id = taskId.getAndIncrement()) < count) {
-        futures.get(id).run();
-        if (id >= count - 1) {
+      while ((id = taskId.getAndIncrement()) < futures.length) {
+        futures[id].run();
+        if (id >= futures.length - 1) {
           // save redundant CAS in case this was the last task
           break;
         }
       }
       Throwable exc = null;
-      List<T> results = new ArrayList<>(count);
-      for (int i = 0; i < count; i++) {
-        Future<T> future = futures.get(i);
+      List<T> results = new ArrayList<>(futures.length);
+      for (Future<T> future : futures) {
         try {
           results.add(future.get());
         } catch (InterruptedException e) {
