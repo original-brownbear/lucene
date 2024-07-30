@@ -139,13 +139,17 @@ public final class TaskExecutor {
     List<T> invokeAll(Executor executor) throws IOException {
       // taskId provides the first index of an un-executed task in #futures
       final AtomicInteger taskId = new AtomicInteger(0);
+      final var futures = this.futures;
       // we fork execution count - 1 tasks to execute at least one task on the current thread to
       // minimize needless forking and blocking of the current thread
       final Runnable work =
           () -> {
-            int id = taskId.getAndIncrement();
-            if (id < futures.length) {
-              futures[id].run();
+            int id;
+            while ((id = taskId.get()) < futures.length) {
+              if (taskId.weakCompareAndSetVolatile(id, id + 1)) {
+                futures[id].run();
+                return;
+              }
             }
           };
       for (int j = 0; j < futures.length - 1; j++) {
