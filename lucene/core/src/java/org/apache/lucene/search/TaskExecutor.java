@@ -66,6 +66,13 @@ public final class TaskExecutor {
    * @param <T> the return type of the task execution
    */
   public <T> List<T> invokeAll(Collection<Callable<T>> callables) throws IOException {
+    if (callables.size() == 1) {
+      try {
+        return Collections.singletonList(callables.iterator().next().call());
+      } catch (Exception e) {
+        throw IOUtils.rethrowAlways(e);
+      }
+    }
     TaskGroup<T> taskGroup = new TaskGroup<>(callables);
     return taskGroup.invokeAll(executor);
   }
