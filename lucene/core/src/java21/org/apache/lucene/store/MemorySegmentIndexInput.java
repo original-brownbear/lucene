@@ -420,16 +420,30 @@ abstract class MemorySegmentIndexInput extends IndexInput
 
   @Override
   protected void readGroupVInt(long[] dst, int offset) throws IOException {
+    long pos = curPosition;
+    MemorySegment curSegment = this.curSegment;
     try {
-      final int len =
-          GroupVIntUtil.readGroupVInt(
-              this,
-              curSegment.byteSize() - curPosition,
-              p -> curSegment.get(LAYOUT_LE_INT, p),
-              curPosition,
-              dst,
-              offset);
-      curPosition += len;
+      if (curSegment.byteSize() - pos < GroupVIntUtil.MAX_LENGTH_PER_GROUP) {
+        GroupVIntUtil.readGroupVInt(this, dst, offset);
+        return;
+      }
+      final int flag = curSegment.get(LAYOUT_BYTE, pos) & 0xFF;
+      ++pos;
+      final int n1Minus1 = flag >> 6;
+      final int n2Minus1 = (flag >> 4) & 0x03;
+      final int n3Minus1 = (flag >> 2) & 0x03;
+      final int n4Minus1 = flag & 0x03;
+
+      // This code path has fewer conditionals and tends to be significantly faster in benchmarks
+      dst[offset] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n1Minus1];
+      pos += 1 + n1Minus1;
+      dst[offset + 1] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n2Minus1];
+      pos += 1 + n2Minus1;
+      dst[offset + 2] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n3Minus1];
+      pos += 1 + n3Minus1;
+      dst[offset + 3] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n4Minus1];
+      pos += 1 + n4Minus1;
+      curPosition = pos;
     } catch (NullPointerException | IllegalStateException e) {
       throw alreadyClosed(e);
     }

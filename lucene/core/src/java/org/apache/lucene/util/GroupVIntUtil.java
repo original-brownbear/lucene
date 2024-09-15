@@ -30,7 +30,7 @@ public final class GroupVIntUtil {
   public static final int MAX_LENGTH_PER_GROUP = 17;
 
   // we use long array instead of int array to make negative integer to be read as positive long.
-  private static final long[] MASKS = new long[] {0xFFL, 0xFFFFL, 0xFFFFFFL, 0xFFFFFFFFL};
+  public static final long[] MASKS = {0xFFL, 0xFFFFL, 0xFFFFFFL, 0xFFFFFFFFL};
 
   /**
    * Default implementation of read single group, for optimal performance, you should use {@link
@@ -71,7 +71,7 @@ public final class GroupVIntUtil {
    * DataInput.
    */
   @FunctionalInterface
-  public static interface IntReader {
+  public interface IntReader {
     int read(long v);
   }
 
