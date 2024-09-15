@@ -66,6 +66,9 @@ import org.apache.lucene.util.IOUtils;
  */
 public final class Lucene912PostingsReader extends PostingsReaderBase {
 
+  private static final ThreadLocal<long[]> tmp =
+      ThreadLocal.withInitial(() -> new long[BLOCK_SIZE / 2]);
+
   static final VectorizationProvider VECTORIZATION_PROVIDER = VectorizationProvider.getInstance();
   static final int BINARY_SEARCH_WINDOW_SIZE = 4;
 
@@ -406,8 +409,6 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
 
   final class BlockDocsEnum extends PostingsEnum {
 
-    private final long[] tmp = new long[BLOCK_SIZE / 2];
-
     private final long[] docBuffer = new long[BLOCK_SIZE + BINARY_SEARCH_WINDOW_SIZE];
     private final long[] freqBuffer = new long[BLOCK_SIZE];
 
@@ -512,7 +513,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     public int freq() throws IOException {
       if (freqFP != -1) {
         docIn.seek(freqFP);
-        PForUtil.decode(docInUtil, freqBuffer, tmp);
+        PForUtil.decode(docInUtil, freqBuffer, tmp.get());
         freqFP = -1;
       }
 
@@ -547,7 +548,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     private void refillFullBlock() throws IOException {
       assert docFreq - docCountUpto >= BLOCK_SIZE;
 
-      ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmp);
+      ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmp.get());
 
       if (indexHasFreq) {
         if (needsFreq) {
@@ -687,8 +688,6 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
   }
 
   final class EverythingEnum extends PostingsEnum {
-
-    private final long[] tmp = new long[BLOCK_SIZE / 2];
 
     private final long[] docBuffer = new long[BLOCK_SIZE + BINARY_SEARCH_WINDOW_SIZE];
     private final long[] freqBuffer = new long[BLOCK_SIZE];
@@ -900,8 +899,9 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       assert left >= 0;
 
       if (left >= BLOCK_SIZE) {
-        ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmp);
-        PForUtil.decode(docInUtil, freqBuffer, tmp);
+        long[] tmpLongs = tmp.get();
+        ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmpLongs);
+        PForUtil.decode(docInUtil, freqBuffer, tmpLongs);
         docCountUpto += BLOCK_SIZE;
       } else if (docFreq == 1) {
         docBuffer[0] = singletonDocID;
@@ -1180,11 +1180,12 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         }
         payloadByteUpto = 0;
       } else {
-        PForUtil.decode(posInUtil, posDeltaBuffer, tmp);
+        long[] tmpLongs = tmp.get();
+        PForUtil.decode(posInUtil, posDeltaBuffer, tmpLongs);
 
         if (indexHasPayloads) {
           if (needsPayloads) {
-            PForUtil.decode(payInUtil, payloadLengthBuffer, tmp);
+            PForUtil.decode(payInUtil, payloadLengthBuffer, tmpLongs);
             int numBytes = payIn.readVInt();
 
             if (numBytes > payloadBytes.length) {
@@ -1203,8 +1204,8 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
 
         if (indexHasOffsets) {
           if (needsOffsets) {
-            PForUtil.decode(payInUtil, offsetStartDeltaBuffer, tmp);
-            PForUtil.decode(payInUtil, offsetLengthBuffer, tmp);
+            PForUtil.decode(payInUtil, offsetStartDeltaBuffer, tmpLongs);
+            PForUtil.decode(payInUtil, offsetLengthBuffer, tmpLongs);
           } else {
             // this works, because when writing a vint block we always force the first length to be
             // written
@@ -1275,8 +1276,6 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
   }
 
   final class BlockImpactsDocsEnum extends ImpactsEnum {
-
-    private final long[] tmp = new long[BLOCK_SIZE / 2];
 
     private final long[] docBuffer = new long[BLOCK_SIZE + BINARY_SEARCH_WINDOW_SIZE];
     private final long[] freqBuffer = new long[BLOCK_SIZE];
@@ -1371,7 +1370,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     public int freq() throws IOException {
       if (freqFP != -1) {
         docIn.seek(freqFP);
-        PForUtil.decode(docInUtil, freqBuffer, tmp);
+        PForUtil.decode(docInUtil, freqBuffer, tmp.get());
         freqFP = -1;
       }
       return (int) freqBuffer[docBufferUpto - 1];
@@ -1407,7 +1406,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       assert left >= 0;
 
       if (left >= BLOCK_SIZE) {
-        ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmp);
+        ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmp.get());
 
         if (indexHasFreq) {
           freqFP = docIn.getFilePointer();
@@ -1629,8 +1628,6 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
 
   final class BlockImpactsPostingsEnum extends ImpactsEnum {
 
-    private final long[] tmp = new long[BLOCK_SIZE / 2];
-
     private final long[] docBuffer = new long[BLOCK_SIZE + BINARY_SEARCH_WINDOW_SIZE];
     private final long[] freqBuffer = new long[BLOCK_SIZE];
     private final long[] posDeltaBuffer = new long[BLOCK_SIZE];
@@ -1777,8 +1774,9 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       assert left >= 0;
 
       if (left >= BLOCK_SIZE) {
-        ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmp);
-        PForUtil.decode(docInUtil, freqBuffer, tmp);
+        long[] tmpLongs = tmp.get();
+        ForDeltaUtil.decodeAndPrefixSum(docInUtil, prevDocID, docBuffer, tmpLongs);
+        PForUtil.decode(docInUtil, freqBuffer, tmpLongs);
         docCountUpto += BLOCK_SIZE;
       } else if (docFreq == 1) {
         docBuffer[0] = singletonDocID;
@@ -2051,7 +2049,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
           }
         }
       } else {
-        PForUtil.decode(posInUtil, posDeltaBuffer, tmp);
+        PForUtil.decode(posInUtil, posDeltaBuffer, tmp.get());
       }
     }
 
