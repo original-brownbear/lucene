@@ -21,6 +21,7 @@ import java.util.Arrays;
 import org.apache.lucene.internal.vectorization.PostingDecodingUtil;
 import org.apache.lucene.store.DataInput;
 import org.apache.lucene.store.DataOutput;
+import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.LongHeap;
 import org.apache.lucene.util.packed.PackedInts;
 
@@ -106,17 +107,18 @@ final class PForUtil {
 
   /** Decode 128 integers into {@code ints}. */
   void decode(PostingDecodingUtil pdu, long[] longs) throws IOException {
-    final int token = Byte.toUnsignedInt(pdu.in.readByte());
+    IndexInput in = pdu.in;
+    final int token = Byte.toUnsignedInt(in.readByte());
     final int bitsPerValue = token & 0x1f;
-    final int numExceptions = token >>> 5;
     if (bitsPerValue == 0) {
-      Arrays.fill(longs, 0, ForUtil.BLOCK_SIZE, pdu.in.readVLong());
+      Arrays.fill(longs, 0, ForUtil.BLOCK_SIZE, in.readVLong());
     } else {
       forUtil.decode(bitsPerValue, pdu, longs);
     }
+    final int numExceptions = token >>> 5;
     for (int i = 0; i < numExceptions; ++i) {
-      longs[Byte.toUnsignedInt(pdu.in.readByte())] |=
-          Byte.toUnsignedLong(pdu.in.readByte()) << bitsPerValue;
+      short s = in.readShort();
+      longs[s & 0xff] |= ((s >> 8) & 0xffL) << bitsPerValue;
     }
   }
 
