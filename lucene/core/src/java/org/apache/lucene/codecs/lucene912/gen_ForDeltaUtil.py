@@ -59,6 +59,8 @@ import static org.apache.lucene.codecs.lucene912.ForUtil.*;
  */
 public final class ForDeltaUtil {
 
+  private ForDeltaUtil() {}
+
   private static final int ONE_BLOCK_SIZE_FOURTH = BLOCK_SIZE / 4;
   private static final int TWO_BLOCK_SIZE_FOURTHS = BLOCK_SIZE / 2;
   private static final int THREE_BLOCK_SIZE_FOURTHS = 3 * BLOCK_SIZE / 4;
@@ -265,13 +267,11 @@ public final class ForDeltaUtil {
     arr[63] += arr[62];
   }
 
-  private final long[] tmp = new long[BLOCK_SIZE / 2];
-
   /**
    * Encode deltas of a strictly monotonically increasing sequence of integers. The provided {@code
    * longs} are expected to be deltas between consecutive values.
    */
-  void encodeDeltas(long[] longs, DataOutput out) throws IOException {
+  static void encodeDeltas(long[] longs, DataOutput out, long[] tmp) throws IOException {
     if (longs[0] == 1 && PForUtil.allEqual(longs)) { // happens with very dense postings
       out.writeByte((byte) 0);
     } else {
@@ -299,18 +299,13 @@ public final class ForDeltaUtil {
   }
 
   /** Decode deltas, compute the prefix sum and add {@code base} to all decoded longs. */
-  void decodeAndPrefixSum(PostingDecodingUtil pdu, long base, long[] longs) throws IOException {
+  static void decodeAndPrefixSum(PostingDecodingUtil pdu, long base, long[] longs, long[] tmp) throws IOException {
     final int bitsPerValue = Byte.toUnsignedInt(pdu.in.readByte());
     if (bitsPerValue == 0) {
       prefixSumOfOnes(longs, base);
     } else {
-      decodeAndPrefixSum(bitsPerValue, pdu, base, longs);
+      decodeAndPrefixSum(bitsPerValue, pdu, base, longs, tmp);
     }
-  }
-
-  void skip(IndexInput in) throws IOException {
-    final int bitsPerValue = Byte.toUnsignedInt(in.readByte());
-    in.skipBytes(numBytes(bitsPerValue));
   }
 
 """
@@ -388,7 +383,7 @@ if __name__ == '__main__':
   /**
    * Delta-decode 128 integers into {@code longs}.
    */
-  void decodeAndPrefixSum(int bitsPerValue, PostingDecodingUtil pdu, long base, long[] longs) throws IOException {
+  static void decodeAndPrefixSum(int bitsPerValue, PostingDecodingUtil pdu, long base, long[] longs, long[] tmp) throws IOException {
     switch (bitsPerValue) {
 """)
   for bpv in range(1, MAX_SPECIALIZED_BITS_PER_VALUE+1):

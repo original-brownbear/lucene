@@ -16,6 +16,8 @@
  */
 package org.apache.lucene.codecs.lucene912;
 
+import static org.apache.lucene.codecs.lucene912.ForUtil.BLOCK_SIZE;
+
 import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
 import java.io.IOException;
 import java.util.Arrays;
@@ -39,18 +41,17 @@ public class TestPForUtil extends LuceneTestCase {
     final Directory d = new ByteBuffersDirectory();
     final long endPointer = encodeTestData(iterations, values, d);
 
-    ForUtil forUtil = new ForUtil();
     IndexInput in = d.openInput("test.bin", IOContext.READONCE);
     PostingDecodingUtil pdu =
         Lucene912PostingsReader.VECTORIZATION_PROVIDER.newPostingDecodingUtil(in);
-    final PForUtil pforUtil = new PForUtil(forUtil);
+    final long[] tmp = new long[BLOCK_SIZE / 2];
     for (int i = 0; i < iterations; ++i) {
       if (random().nextInt(5) == 0) {
-        pforUtil.skip(in);
+        PForUtil.skip(in);
         continue;
       }
       final long[] restored = new long[ForUtil.BLOCK_SIZE];
-      pforUtil.decode(pdu, restored);
+      PForUtil.decode(pdu, restored, tmp);
       int[] ints = new int[ForUtil.BLOCK_SIZE];
       for (int j = 0; j < ForUtil.BLOCK_SIZE; ++j) {
         ints[j] = Math.toIntExact(restored[j]);
@@ -91,14 +92,14 @@ public class TestPForUtil extends LuceneTestCase {
 
   private long encodeTestData(int iterations, int[] values, Directory d) throws IOException {
     IndexOutput out = d.createOutput("test.bin", IOContext.DEFAULT);
-    final PForUtil pforUtil = new PForUtil(new ForUtil());
 
+    long[] tmp = new long[BLOCK_SIZE / 2];
     for (int i = 0; i < iterations; ++i) {
       long[] source = new long[ForUtil.BLOCK_SIZE];
       for (int j = 0; j < ForUtil.BLOCK_SIZE; ++j) {
         source[j] = values[i * ForUtil.BLOCK_SIZE + j];
       }
-      pforUtil.encode(source, out);
+      PForUtil.encode(source, out, tmp);
     }
     final long endPointer = out.getFilePointer();
     out.close();

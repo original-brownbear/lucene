@@ -16,6 +16,8 @@
  */
 package org.apache.lucene.codecs.lucene912;
 
+import static org.apache.lucene.codecs.lucene912.ForUtil.BLOCK_SIZE;
+
 import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
 import java.io.IOException;
 import java.util.Arrays;
@@ -49,14 +51,14 @@ public class TestForDeltaUtil extends LuceneTestCase {
     {
       // encode
       IndexOutput out = d.createOutput("test.bin", IOContext.DEFAULT);
-      final ForDeltaUtil forDeltaUtil = new ForDeltaUtil();
 
+      final long[] tmp = new long[BLOCK_SIZE / 2];
       for (int i = 0; i < iterations; ++i) {
         long[] source = new long[ForUtil.BLOCK_SIZE];
         for (int j = 0; j < ForUtil.BLOCK_SIZE; ++j) {
           source[j] = values[i * ForUtil.BLOCK_SIZE + j];
         }
-        forDeltaUtil.encodeDeltas(source, out);
+        ForDeltaUtil.encodeDeltas(source, out, tmp);
       }
       endPointer = out.getFilePointer();
       out.close();
@@ -67,11 +69,11 @@ public class TestForDeltaUtil extends LuceneTestCase {
       IndexInput in = d.openInput("test.bin", IOContext.READONCE);
       PostingDecodingUtil pdu =
           Lucene912PostingsReader.VECTORIZATION_PROVIDER.newPostingDecodingUtil(in);
-      ForDeltaUtil forDeltaUtil = new ForDeltaUtil();
+      long[] tmp = new long[BLOCK_SIZE / 2];
       for (int i = 0; i < iterations; ++i) {
         long base = 0;
         final long[] restored = new long[ForUtil.BLOCK_SIZE];
-        forDeltaUtil.decodeAndPrefixSum(pdu, base, restored);
+        ForDeltaUtil.decodeAndPrefixSum(pdu, base, restored, tmp);
         final long[] expected = new long[ForUtil.BLOCK_SIZE];
         for (int j = 0; j < ForUtil.BLOCK_SIZE; ++j) {
           expected[j] = values[i * ForUtil.BLOCK_SIZE + j];

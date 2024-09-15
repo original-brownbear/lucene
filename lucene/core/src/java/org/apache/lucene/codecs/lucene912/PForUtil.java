@@ -27,6 +27,8 @@ import org.apache.lucene.util.packed.PackedInts;
 /** Utility class to encode sequences of 128 small positive integers. */
 final class PForUtil {
 
+  private PForUtil() {}
+
   private static final int MAX_EXCEPTIONS = 7;
 
   static boolean allEqual(long[] l) {
@@ -38,15 +40,12 @@ final class PForUtil {
     return true;
   }
 
-  private final ForUtil forUtil;
-
-  PForUtil(ForUtil forUtil) {
+  static {
     assert ForUtil.BLOCK_SIZE <= 256 : "blocksize must fit in one byte. got " + ForUtil.BLOCK_SIZE;
-    this.forUtil = forUtil;
   }
 
   /** Encode 128 integers from {@code longs} into {@code out}. */
-  void encode(long[] longs, DataOutput out) throws IOException {
+  static void encode(long[] longs, DataOutput out, long[] tmp) throws IOException {
     // Determine the top MAX_EXCEPTIONS + 1 values
     final LongHeap top = new LongHeap(MAX_EXCEPTIONS + 1);
     for (int i = 0; i <= MAX_EXCEPTIONS; ++i) {
@@ -99,20 +98,20 @@ final class PForUtil {
     } else {
       final int token = (numExceptions << 5) | patchedBitsRequired;
       out.writeByte((byte) token);
-      forUtil.encode(longs, patchedBitsRequired, out);
+      ForUtil.encode(longs, patchedBitsRequired, out, tmp);
     }
     out.writeBytes(exceptions, exceptions.length);
   }
 
   /** Decode 128 integers into {@code ints}. */
-  void decode(PostingDecodingUtil pdu, long[] longs) throws IOException {
+  static void decode(PostingDecodingUtil pdu, long[] longs, long[] tmp) throws IOException {
     final int token = Byte.toUnsignedInt(pdu.in.readByte());
     final int bitsPerValue = token & 0x1f;
     final int numExceptions = token >>> 5;
     if (bitsPerValue == 0) {
       Arrays.fill(longs, 0, ForUtil.BLOCK_SIZE, pdu.in.readVLong());
     } else {
-      forUtil.decode(bitsPerValue, pdu, longs);
+      ForUtil.decode(bitsPerValue, pdu, longs, tmp);
     }
     for (int i = 0; i < numExceptions; ++i) {
       longs[Byte.toUnsignedInt(pdu.in.readByte())] |=
@@ -121,7 +120,7 @@ final class PForUtil {
   }
 
   /** Skip 128 integers. */
-  void skip(DataInput in) throws IOException {
+  static void skip(DataInput in) throws IOException {
     final int token = Byte.toUnsignedInt(in.readByte());
     final int bitsPerValue = token & 0x1f;
     final int numExceptions = token >>> 5;

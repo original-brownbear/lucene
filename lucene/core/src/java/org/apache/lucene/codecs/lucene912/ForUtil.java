@@ -29,6 +29,8 @@ import org.apache.lucene.store.DataOutput;
  */
 public final class ForUtil {
 
+  private ForUtil() {}
+
   public static final int BLOCK_SIZE = 128;
   static final int BLOCK_SIZE_LOG2 = 7;
 
@@ -114,10 +116,9 @@ public final class ForUtil {
     }
   }
 
-  private final long[] tmp = new long[BLOCK_SIZE / 2];
-
   /** Encode 128 integers from {@code longs} into {@code out}. */
-  void encode(long[] longs, int bitsPerValue, DataOutput out) throws IOException {
+  static void encode(long[] longs, int bitsPerValue, DataOutput out, long[] tmp)
+      throws IOException {
     final int nextPrimitive;
     if (bitsPerValue <= 8) {
       nextPrimitive = 8;
@@ -288,7 +289,8 @@ public final class ForUtil {
   static final long MASK32_24 = MASKS32[24];
 
   /** Decode 128 integers into {@code longs}. */
-  void decode(int bitsPerValue, PostingDecodingUtil pdu, long[] longs) throws IOException {
+  static void decode(int bitsPerValue, PostingDecodingUtil pdu, long[] longs, long[] tmp)
+      throws IOException {
     switch (bitsPerValue) {
       case 1:
         decode1(pdu, tmp, longs);

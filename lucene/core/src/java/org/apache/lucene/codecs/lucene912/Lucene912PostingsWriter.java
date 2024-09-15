@@ -92,8 +92,7 @@ public class Lucene912PostingsWriter extends PushPostingsWriterBase {
   private int lastStartOffset;
   private int docCount;
 
-  private final PForUtil pforUtil;
-  private final ForDeltaUtil forDeltaUtil;
+  private final long[] tmp = new long[ForUtil.BLOCK_SIZE / 2];
 
   private boolean fieldHasNorms;
   private NumericDocValues norms;
@@ -142,9 +141,6 @@ public class Lucene912PostingsWriter extends PushPostingsWriterBase {
           metaOut, META_CODEC, VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
       CodecUtil.writeIndexHeader(
           docOut, DOC_CODEC, VERSION_CURRENT, state.segmentInfo.getId(), state.segmentSuffix);
-      final ForUtil forUtil = new ForUtil();
-      forDeltaUtil = new ForDeltaUtil();
-      pforUtil = new PForUtil(forUtil);
       if (state.fieldInfos.hasProx()) {
         posDeltaBuffer = new long[BLOCK_SIZE];
         String posFileName =
@@ -325,17 +321,17 @@ public class Lucene912PostingsWriter extends PushPostingsWriterBase {
     posBufferUpto++;
     lastPosition = position;
     if (posBufferUpto == BLOCK_SIZE) {
-      pforUtil.encode(posDeltaBuffer, posOut);
+      PForUtil.encode(posDeltaBuffer, posOut, tmp);
 
       if (writePayloads) {
-        pforUtil.encode(payloadLengthBuffer, payOut);
+        PForUtil.encode(payloadLengthBuffer, payOut, tmp);
         payOut.writeVInt(payloadByteUpto);
         payOut.writeBytes(payloadBytes, 0, payloadByteUpto);
         payloadByteUpto = 0;
       }
       if (writeOffsets) {
-        pforUtil.encode(offsetStartDeltaBuffer, payOut);
-        pforUtil.encode(offsetLengthBuffer, payOut);
+        PForUtil.encode(offsetStartDeltaBuffer, payOut, tmp);
+        PForUtil.encode(offsetLengthBuffer, payOut, tmp);
       }
       posBufferUpto = 0;
     }
@@ -406,9 +402,9 @@ public class Lucene912PostingsWriter extends PushPostingsWriterBase {
         }
       }
       long numSkipBytes = level0Output.size();
-      forDeltaUtil.encodeDeltas(docDeltaBuffer, level0Output);
+      ForDeltaUtil.encodeDeltas(docDeltaBuffer, level0Output, tmp);
       if (writeFreqs) {
-        pforUtil.encode(freqBuffer, level0Output);
+        PForUtil.encode(freqBuffer, level0Output, tmp);
       }
 
       // docID - lastBlockDocID is at least 128, so it can never fit a single byte with a vint

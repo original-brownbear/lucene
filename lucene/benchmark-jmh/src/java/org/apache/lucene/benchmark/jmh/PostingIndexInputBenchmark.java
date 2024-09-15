@@ -21,8 +21,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-import org.apache.lucene.codecs.lucene912.ForDeltaUtil;
-import org.apache.lucene.codecs.lucene912.ForUtil;
 import org.apache.lucene.codecs.lucene912.PostingIndexInput;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.IOContext;
@@ -59,8 +57,6 @@ public class PostingIndexInputBenchmark {
   private Directory dir;
   private IndexInput in;
   private PostingIndexInput postingIn;
-  private final ForUtil forUtil = new ForUtil();
-  private final ForDeltaUtil forDeltaUtil = new ForDeltaUtil();
   private final long[] values = new long[128];
 
   @Param({"2", "3", "4", "5", "6", "7", "8", "9", "10"})
@@ -78,7 +74,7 @@ public class PostingIndexInputBenchmark {
       }
     }
     in = dir.openInput("docs", IOContext.DEFAULT);
-    postingIn = new PostingIndexInput(in, forUtil, forDeltaUtil);
+    postingIn = new PostingIndexInput(in);
   }
 
   @TearDown(Level.Trial)

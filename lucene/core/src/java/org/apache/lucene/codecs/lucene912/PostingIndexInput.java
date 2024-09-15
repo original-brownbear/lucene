@@ -31,20 +31,16 @@ public final class PostingIndexInput {
   private static final VectorizationProvider VECTORIZATION_PROVIDER =
       VectorizationProvider.getInstance();
 
-  public final ForUtil forUtil;
-  public final ForDeltaUtil forDeltaUtil;
+  private final long[] tmp = new long[ForUtil.BLOCK_SIZE / 2];
   private final PostingDecodingUtil postingDecodingUtil;
 
-  public PostingIndexInput(IndexInput in, ForUtil forUtil, ForDeltaUtil forDeltaUtil)
-      throws IOException {
-    this.forUtil = forUtil;
-    this.forDeltaUtil = forDeltaUtil;
+  public PostingIndexInput(IndexInput in) throws IOException {
     this.postingDecodingUtil = VECTORIZATION_PROVIDER.newPostingDecodingUtil(in);
   }
 
   /** Decode 128 integers stored on {@code bitsPerValues} bits per value into {@code longs}. */
   public void decode(int bitsPerValue, long[] longs) throws IOException {
-    forUtil.decode(bitsPerValue, postingDecodingUtil, longs);
+    ForUtil.decode(bitsPerValue, postingDecodingUtil, longs, tmp);
   }
 
   /**
@@ -52,6 +48,6 @@ public final class PostingIndexInput {
    * and store results into {@code longs}.
    */
   public void decodeAndPrefixSum(int bitsPerValue, long base, long[] longs) throws IOException {
-    forDeltaUtil.decodeAndPrefixSum(bitsPerValue, postingDecodingUtil, base, longs);
+    ForDeltaUtil.decodeAndPrefixSum(bitsPerValue, postingDecodingUtil, base, longs, tmp);
   }
 }
