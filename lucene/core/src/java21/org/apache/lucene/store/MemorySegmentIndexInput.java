@@ -435,13 +435,13 @@ abstract class MemorySegmentIndexInput extends IndexInput
       final int n4Minus1 = flag & 0x03;
 
       // This code path has fewer conditionals and tends to be significantly faster in benchmarks
-      dst[offset] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n1Minus1];
+      dst[offset] = GroupVIntUtil.toPositiveInt(curSegment.get(LAYOUT_LE_INT, pos), n1Minus1);
       pos += 1 + n1Minus1;
-      dst[offset + 1] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n2Minus1];
+      dst[offset + 1] = GroupVIntUtil.toPositiveInt(curSegment.get(LAYOUT_LE_INT, pos), n2Minus1);
       pos += 1 + n2Minus1;
-      dst[offset + 2] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n3Minus1];
+      dst[offset + 2] = GroupVIntUtil.toPositiveInt(curSegment.get(LAYOUT_LE_INT, pos), n3Minus1);
       pos += 1 + n3Minus1;
-      dst[offset + 3] = curSegment.get(LAYOUT_LE_INT, pos) & GroupVIntUtil.MASKS[n4Minus1];
+      dst[offset + 3] = GroupVIntUtil.toPositiveInt(curSegment.get(LAYOUT_LE_INT, pos), n4Minus1);
       pos += 1 + n4Minus1;
       curPosition = pos;
     } catch (NullPointerException | IllegalStateException e) {

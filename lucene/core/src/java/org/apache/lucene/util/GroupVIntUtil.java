@@ -29,9 +29,6 @@ public final class GroupVIntUtil {
   // the maximum length of a single group-varint is 4 integers + 1 byte flag.
   public static final int MAX_LENGTH_PER_GROUP = 17;
 
-  // we use long array instead of int array to make negative integer to be read as positive long.
-  public static final long[] MASKS = {0xFFL, 0xFFFFL, 0xFFFFFFL, 0xFFFFFFFFL};
-
   /**
    * Default implementation of read single group, for optimal performance, you should use {@link
    * DataInput#readGroupVInts(long[], int)} instead.
@@ -104,15 +101,23 @@ public final class GroupVIntUtil {
     final int n4Minus1 = flag & 0x03;
 
     // This code path has fewer conditionals and tends to be significantly faster in benchmarks
-    dst[offset] = reader.read(pos) & MASKS[n1Minus1];
+    dst[offset] = toPositiveInt(reader.read(pos), n1Minus1);
     pos += 1 + n1Minus1;
-    dst[offset + 1] = reader.read(pos) & MASKS[n2Minus1];
+    dst[offset + 1] = toPositiveInt(reader.read(pos), n2Minus1);
     pos += 1 + n2Minus1;
-    dst[offset + 2] = reader.read(pos) & MASKS[n3Minus1];
+    dst[offset + 2] = toPositiveInt(reader.read(pos), n3Minus1);
     pos += 1 + n3Minus1;
-    dst[offset + 3] = reader.read(pos) & MASKS[n4Minus1];
+    dst[offset + 3] = toPositiveInt(reader.read(pos), n4Minus1);
     pos += 1 + n4Minus1;
     return (int) (pos - posStart);
+  }
+
+  // we use long array instead of int array to make negative integer to be read as positive long.
+  private static final long[] MASKS = {0xFFL, 0xFFFFL, 0xFFFFFFL, 0xFFFFFFFFL};
+
+  /** Read {@code bytesMinusOne + 1} bytes of a long as a positive integer. */
+  public static long toPositiveInt(long l, int bytesMinusOne) {
+    return l & MASKS[bytesMinusOne];
   }
 
   private static int numBytes(int v) {
