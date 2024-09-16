@@ -296,13 +296,6 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       DataInput in, FieldInfo fieldInfo, BlockTermState _termState, boolean absolute)
       throws IOException {
     final IntBlockTermState termState = (IntBlockTermState) _termState;
-    final boolean fieldHasPositions =
-        fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0;
-    final boolean fieldHasOffsets =
-        fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS)
-            >= 0;
-    final boolean fieldHasPayloads = fieldInfo.hasPayloads();
-
     if (absolute) {
       termState.docStartFP = 0;
       termState.posStartFP = 0;
@@ -323,9 +316,11 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       termState.singletonDocID += BitUtil.zigZagDecode(l >>> 1);
     }
 
-    if (fieldHasPositions) {
+    IndexOptions indexOptions = fieldInfo.getIndexOptions();
+    if (indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0) {
       termState.posStartFP += in.readVLong();
-      if (fieldHasOffsets || fieldHasPayloads) {
+      if (indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0
+          || fieldInfo.hasPayloads()) {
         termState.payStartFP += in.readVLong();
       }
       if (termState.totalTermFreq > BLOCK_SIZE) {
@@ -718,7 +713,6 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
 
     final boolean indexHasFreq;
     final boolean indexHasOffsets;
-    final boolean indexHasPayloads;
     final boolean indexHasOffsetsOrPayloads;
 
     private int docFreq; // number of docs in this posting list
@@ -766,8 +760,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
                   .getIndexOptions()
                   .compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS)
               >= 0;
-      indexHasPayloads = fieldInfo.hasPayloads();
-      indexHasOffsetsOrPayloads = indexHasOffsets || indexHasPayloads;
+      indexHasOffsetsOrPayloads = indexHasOffsets || fieldInfo.hasPayloads();
 
       this.posIn = Lucene912PostingsReader.this.posIn.clone();
       posInUtil = VECTORIZATION_PROVIDER.newPostingDecodingUtil(posIn);
@@ -788,7 +781,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         endOffset = -1;
       }
 
-      if (indexHasPayloads) {
+      if (fieldInfo.hasPayloads()) {
         payloadLengthBuffer = new long[BLOCK_SIZE];
         payloadBytes = new byte[128];
         payload = new BytesRef();
@@ -810,7 +803,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
                       .getIndexOptions()
                       .compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS)
                   >= 0)
-          && indexHasPayloads == fieldInfo.hasPayloads();
+          && payload != null == fieldInfo.hasPayloads();
     }
 
     public PostingsEnum reset(IntBlockTermState termState, int flags) throws IOException {
@@ -1067,6 +1060,8 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         refillDocs();
       }
 
+      long[] docBuffer = this.docBuffer;
+      int docBufferUpto = this.docBufferUpto;
       int next = findNextGEQ(docBuffer, target, docBufferUpto);
       for (int i = docBufferUpto; i <= next; ++i) {
         posPendingCount += freqBuffer[i];
@@ -1087,9 +1082,10 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       // }
 
       final int leftInBlock = BLOCK_SIZE - posBufferUpto;
+      boolean indexHasPayload = payload != null;
       if (toSkip < leftInBlock) {
         int end = (int) (posBufferUpto + toSkip);
-        if (indexHasPayloads) {
+        if (indexHasPayload) {
           for (int i = posBufferUpto; i < end; ++i) {
             payloadByteUpto += payloadLengthBuffer[i];
           }
@@ -1101,7 +1097,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
           assert posIn.getFilePointer() != lastPosBlockFP;
           pforUtil.skip(posIn);
 
-          if (indexHasPayloads) {
+          if (indexHasPayload) {
             // Skip payloadLength block:
             pforUtil.skip(payIn);
 
@@ -1119,7 +1115,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         refillPositions();
         payloadByteUpto = 0;
         final int toSkipInt = (int) toSkip;
-        if (indexHasPayloads) {
+        if (indexHasPayload) {
           for (int i = 0; i < toSkipInt; ++i) {
             payloadByteUpto += payloadLengthBuffer[i];
           }
@@ -1132,6 +1128,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     }
 
     private void refillPositions() throws IOException {
+      boolean indexHasPayloads = payload != null;
       if (posIn.getFilePointer() == lastPosBlockFP) {
         final int count = (int) (totalTermFreq % BLOCK_SIZE);
         int payloadLength = 0;
@@ -1218,7 +1215,8 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       }
       position += posDeltaBuffer[posBufferUpto];
 
-      if (indexHasPayloads) {
+      BytesRef payload = this.payload;
+      if (payload != null) {
         payloadLength = (int) payloadLengthBuffer[posBufferUpto];
         payload.bytes = payloadBytes;
         payload.offset = payloadByteUpto;
@@ -1403,6 +1401,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     }
 
     private void skipLevel1To(int target) throws IOException {
+      var docIn = this.docIn;
       while (true) {
         prevDocID = level1LastDocID;
         level0LastDocID = level1LastDocID;
@@ -1430,10 +1429,10 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     }
 
     private void skipLevel0To(int target) throws IOException {
+      var docIn = this.docIn;
       while (true) {
         prevDocID = level0LastDocID;
         if (docFreq - docCountUpto >= BLOCK_SIZE) {
-          var docIn = this.docIn;
           long skip0NumBytes = docIn.readVLong();
           // end offset of skip data (before the actual data starts)
           long skip0End = docIn.getFilePointer() + skip0NumBytes;
