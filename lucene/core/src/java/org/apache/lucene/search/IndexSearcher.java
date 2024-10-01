@@ -114,8 +114,6 @@ public class IndexSearcher {
   protected final IndexReaderContext readerContext;
   protected final List<LeafReaderContext> leafContexts;
 
-  private final boolean hasExecutor;
-
   // Used internally for load balancing threads executing for the query
   private final TaskExecutor taskExecutor;
 
@@ -185,6 +183,8 @@ public class IndexSearcher {
   /** The Similarity implementation used by this searcher. */
   private Similarity similarity = defaultSimilarity;
 
+  private final LeafSlice[] leafSlices;
+
   /** Creates a searcher searching the provided index. */
   public IndexSearcher(IndexReader r) {
     this(r, null);
@@ -223,7 +223,39 @@ public class IndexSearcher {
         executor == null ? new TaskExecutor(Runnable::run) : new TaskExecutor(executor);
     this.readerContext = context;
     leafContexts = context.leaves();
-    hasExecutor = executor != null;
+    LeafSlice[] slices;
+    var leaves = leafContexts;
+    if (executor != null) {
+      slices = slices(leaves);
+    } else {
+      slices =
+          leaves.isEmpty()
+              ? new LeafSlice[0]
+              : new LeafSlice[] {
+                new LeafSlice(
+                    leaves.stream()
+                        .map(LeafReaderContextPartition::createForEntireSegment)
+                        .toList())
+              };
+    }
+    /*
+     * Enforce that there aren't multiple leaf partitions within the same leaf slice pointing to the
+     * same leaf context. It is a requirement that {@link Collector#getLeafCollector(LeafReaderContext)}
+     * gets called once per leaf context. Also, it does not make sense to partition a segment to then search
+     * those partitions as part of the same slice, because the goal of partitioning is parallel searching
+     * which happens at the slice level.
+     */
+    for (LeafSlice leafSlice : slices) {
+      Set<LeafReaderContext> distinctLeaves = new HashSet<>();
+      for (LeafReaderContextPartition leafPartition : leafSlice.partitions) {
+        distinctLeaves.add(leafPartition.ctx);
+      }
+      if (leafSlice.partitions.length != distinctLeaves.size()) {
+        throw new IllegalStateException(
+            "The same slice targets multiple leaf partitions of the same leaf reader context. A physical segment should rather get partitioned to be searched concurrently from as many slices as the number of leaf partitions it is split into.");
+      }
+    }
+    leafSlices = slices;
   }
 
   /**
@@ -517,8 +549,6 @@ public class IndexSearcher {
     return search(new ConstantScoreQuery(query), new TotalHitCountCollectorManager(getSlices()));
   }
 
-  private volatile LeafSlice[] leafSlices;
-
   /**
    * Returns the leaf slices used for concurrent searching. Override {@link #slices(List)} to
    * customize how slices are created.
@@ -526,48 +556,7 @@ public class IndexSearcher {
    * @lucene.experimental
    */
   public final LeafSlice[] getSlices() {
-    LeafSlice[] slices = this.leafSlices;
-    if (slices == null) {
-      slices = makeAndCacheSlices();
-    }
-    return slices;
-  }
-
-  private LeafSlice[] makeAndCacheSlices() {
-    LeafSlice[] slices;
-    var leaves = leafContexts;
-    if (hasExecutor) {
-      slices = slices(leaves);
-    } else {
-      slices =
-          leaves.isEmpty()
-              ? new LeafSlice[0]
-              : new LeafSlice[] {
-                new LeafSlice(
-                    leaves.stream()
-                        .map(LeafReaderContextPartition::createForEntireSegment)
-                        .toList())
-              };
-    }
-    /*
-     * Enforce that there aren't multiple leaf partitions within the same leaf slice pointing to the
-     * same leaf context. It is a requirement that {@link Collector#getLeafCollector(LeafReaderContext)}
-     * gets called once per leaf context. Also, it does not make sense to partition a segment to then search
-     * those partitions as part of the same slice, because the goal of partitioning is parallel searching
-     * which happens at the slice level.
-     */
-    for (LeafSlice leafSlice : slices) {
-      Set<LeafReaderContext> distinctLeaves = new HashSet<>();
-      for (LeafReaderContextPartition leafPartition : leafSlice.partitions) {
-        distinctLeaves.add(leafPartition.ctx);
-      }
-      if (leafSlice.partitions.length != distinctLeaves.size()) {
-        throw new IllegalStateException(
-            "The same slice targets multiple leaf partitions of the same leaf reader context. A physical segment should rather get partitioned to be searched concurrently from as many slices as the number of leaf partitions it is split into.");
-      }
-    }
-    this.leafSlices = slices;
-    return slices;
+    return leafSlices;
   }
 
   /**
