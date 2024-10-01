@@ -724,44 +724,35 @@ public class IndexSearcher {
   public <C extends Collector, T> T search(Query query, CollectorManager<C, T> collectorManager)
       throws IOException {
     final C firstCollector = collectorManager.newCollector();
-    query = rewrite(query, firstCollector.scoreMode().needsScores());
-    final Weight weight = createWeight(query, firstCollector.scoreMode(), 1);
-    return search(weight, collectorManager, firstCollector);
-  }
-
-  private <C extends Collector, T> T search(
-      Weight weight, CollectorManager<C, T> collectorManager, C firstCollector) throws IOException {
     final LeafSlice[] leafSlices = getSlices();
     if (leafSlices.length == 0) {
       // there are no segments, nothing to offload to the executor, but we do need to call reduce to
       // create some kind of empty result
       assert leafContexts.isEmpty();
       return collectorManager.reduce(Collections.singletonList(firstCollector));
-    } else {
-      final List<C> collectors = new ArrayList<>(leafSlices.length);
-      collectors.add(firstCollector);
-      final ScoreMode scoreMode = firstCollector.scoreMode();
-      for (int i = 1; i < leafSlices.length; ++i) {
-        final C collector = collectorManager.newCollector();
-        collectors.add(collector);
-        if (scoreMode != collector.scoreMode()) {
-          throw new IllegalStateException(
-              "CollectorManager does not always produce collectors with the same score mode");
-        }
-      }
-      final List<Callable<C>> listTasks = new ArrayList<>(leafSlices.length);
-      for (int i = 0; i < leafSlices.length; ++i) {
-        final LeafReaderContextPartition[] leaves = leafSlices[i].partitions;
-        final C collector = collectors.get(i);
-        listTasks.add(
-            () -> {
-              search(leaves, weight, collector);
-              return collector;
-            });
-      }
-      List<C> results = taskExecutor.invokeAll(listTasks);
-      return collectorManager.reduce(results);
     }
+    final ScoreMode scoreMode = firstCollector.scoreMode();
+    final Weight weight =
+        createWeight(rewrite(query, scoreMode.needsScores()), firstCollector.scoreMode(), 1);
+    if (leafSlices.length == 1) {
+      search(leafSlices[0].partitions, weight, firstCollector);
+      return collectorManager.reduce(Collections.singletonList(firstCollector));
+    }
+    final List<Callable<C>> listTasks = new ArrayList<>(leafSlices.length);
+    for (int i = 0; i < leafSlices.length; ++i) {
+      final C collector = i == 0 ? firstCollector : collectorManager.newCollector();
+      if (scoreMode != collector.scoreMode()) {
+        throw new IllegalStateException(
+            "CollectorManager does not always produce collectors with the same score mode");
+      }
+      final LeafReaderContextPartition[] leaves = leafSlices[i].partitions;
+      listTasks.add(
+          () -> {
+            search(leaves, weight, collector);
+            return collector;
+          });
+    }
+    return collectorManager.reduce(taskExecutor.invokeAll(listTasks));
   }
 
   /**
@@ -1196,10 +1187,12 @@ public class IndexSearcher {
 
     @Override
     public LeafSlice[] get() {
-      if (leafSlices == null) {
+      LeafSlice[] l = leafSlices;
+      if (l == null) {
         synchronized (this) {
-          if (leafSlices == null) {
-            leafSlices =
+          l = leafSlices;
+          if (l == null) {
+            l =
                 Objects.requireNonNull(
                     sliceProvider.apply(leaves), "slices computed by the provider is null");
             /*
@@ -1209,7 +1202,7 @@ public class IndexSearcher {
              * those partitions as part of the same slice, because the goal of partitioning is parallel searching
              * which happens at the slice level.
              */
-            for (LeafSlice leafSlice : leafSlices) {
+            for (LeafSlice leafSlice : l) {
               Set<LeafReaderContext> distinctLeaves = new HashSet<>();
               for (LeafReaderContextPartition leafPartition : leafSlice.partitions) {
                 distinctLeaves.add(leafPartition.ctx);
@@ -1219,10 +1212,11 @@ public class IndexSearcher {
                     "The same slice targets multiple leaf partitions of the same leaf reader context. A physical segment should rather get partitioned to be searched concurrently from as many slices as the number of leaf partitions it is split into.");
               }
             }
+            leafSlices = l;
           }
         }
       }
-      return leafSlices;
+      return l;
     }
   }
 }
