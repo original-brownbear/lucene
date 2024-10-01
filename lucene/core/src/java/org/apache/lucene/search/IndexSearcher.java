@@ -991,11 +991,11 @@ public class IndexSearcher {
           leafReaderContextPartitions.toArray(new LeafReaderContextPartition[0]);
       Arrays.sort(partitions, COMPARATOR);
       this.partitions = partitions;
-      this.maxDocs =
-          Arrays.stream(partitions)
-              .map(leafPartition -> leafPartition.maxDocs)
-              .reduce(Integer::sum)
-              .get();
+      int maxDocs = 0;
+      for (LeafReaderContextPartition partition : partitions) {
+        maxDocs += partition.maxDocs;
+      }
+      this.maxDocs = maxDocs;
     }
 
     /**
