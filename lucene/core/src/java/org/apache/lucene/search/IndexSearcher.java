@@ -27,7 +27,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
@@ -518,7 +517,7 @@ public class IndexSearcher {
     return search(new ConstantScoreQuery(query), new TotalHitCountCollectorManager(getSlices()));
   }
 
-  private final AtomicReference<LeafSlice[]> leafSlices = new AtomicReference<>();
+  private volatile LeafSlice[] leafSlices;
 
   /**
    * Returns the leaf slices used for concurrent searching. Override {@link #slices(List)} to
@@ -527,7 +526,7 @@ public class IndexSearcher {
    * @lucene.experimental
    */
   public final LeafSlice[] getSlices() {
-    LeafSlice[] slices = leafSlices.get();
+    LeafSlice[] slices = this.leafSlices;
     if (slices == null) {
       slices = makeAndCacheSlices();
     }
@@ -567,7 +566,7 @@ public class IndexSearcher {
             "The same slice targets multiple leaf partitions of the same leaf reader context. A physical segment should rather get partitioned to be searched concurrently from as many slices as the number of leaf partitions it is split into.");
       }
     }
-    leafSlices.set(slices);
+    this.leafSlices = slices;
     return slices;
   }
 
