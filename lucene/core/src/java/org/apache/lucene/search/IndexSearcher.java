@@ -537,6 +537,8 @@ public class IndexSearcher {
     LeafSlice[] slices;
     var leaves = leafContexts;
     if (hasExecutor) {
+      slices = slices(leaves);
+    } else {
       slices =
           leaves.isEmpty()
               ? new LeafSlice[0]
@@ -546,8 +548,6 @@ public class IndexSearcher {
                         .map(LeafReaderContextPartition::createForEntireSegment)
                         .toList())
               };
-    } else {
-      slices = slices(leaves);
     }
     /*
      * Enforce that there aren't multiple leaf partitions within the same leaf slice pointing to the
