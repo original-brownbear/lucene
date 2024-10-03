@@ -166,6 +166,7 @@ public final class IndexMerger {
       }
     }
 
+    iwc.setParentField("parent");
     iwc.setMergePolicy(new LogDocMergePolicy());
     iwc.setIndexDeletionPolicy(new KeepOnlyLastCommitDeletionPolicy());
 
