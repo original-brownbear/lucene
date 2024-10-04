@@ -518,6 +518,9 @@ public abstract class NumericComparator<T extends Number> extends FieldComparato
           return DocIdSetIterator.empty();
         }
         assert assertMostCompetitiveValuesSorted(disis);
+        if (disis.size() == 1) {
+          return disis.getFirst().disi;
+        }
 
         PriorityQueue<DisiAndMostCompetitiveValue> disjunction =
             new PriorityQueue<>(disis.size()) {
@@ -669,18 +672,17 @@ public abstract class NumericComparator<T extends Number> extends FieldComparato
     public int advance(int target) throws IOException {
       if (target >= maxDoc) {
         return doc = NO_MORE_DOCS;
-      } else {
-        DisiAndMostCompetitiveValue top = disjunction.top();
-        if (top == null) {
-          // priority queue is empty, none of the remaining documents are competitive
-          return doc = NO_MORE_DOCS;
-        }
-        while (top.disi.docID() < target) {
-          top.disi.advance(target);
-          top = disjunction.updateTop();
-        }
-        return doc = top.disi.docID();
       }
+      DisiAndMostCompetitiveValue top = disjunction.top();
+      if (top == null) {
+        // priority queue is empty, none of the remaining documents are competitive
+        return doc = NO_MORE_DOCS;
+      }
+      while (top.disi.docID() < target) {
+        top.disi.advance(target);
+        top = disjunction.updateTop();
+      }
+      return doc = top.disi.docID();
     }
 
     @Override
