@@ -235,8 +235,7 @@ public abstract class NumericComparator<T extends Number> extends FieldComparato
         if (queueFull) {
           encodeBottom();
         }
-        DisjunctionBuildVisitor visitor = new DisjunctionBuildVisitor();
-        competitiveIterator = visitor.generateCompetitiveIterator();
+        competitiveIterator = new DisjunctionBuildVisitor().generateCompetitiveIterator();
       }
     }
 
@@ -438,28 +437,47 @@ public abstract class NumericComparator<T extends Number> extends FieldComparato
       }
 
       void intersectLeaves(PointValues.PointTree pointTree) throws IOException {
-        PointValues.Relation r =
-            compare(pointTree.getMinPackedValue(), pointTree.getMaxPackedValue());
-        switch (r) {
-          case CELL_INSIDE_QUERY, CELL_CROSSES_QUERY -> {
-            if (pointTree.moveToChild()) {
-              do {
-                intersectLeaves(pointTree);
-              } while (pointTree.moveToSibling());
-              pointTree.moveToParent();
-            } else {
-              if (r == PointValues.Relation.CELL_CROSSES_QUERY) {
-                pointTree.visitDocValues(this);
-              } else {
-                pointTree.visitDocIDs(this);
+        boolean goingDown = true;
+        while (true) {
+          PointValues.Relation r =
+              compare(pointTree.getMinPackedValue(), pointTree.getMaxPackedValue());
+          switch (r) {
+            case CELL_INSIDE_QUERY, CELL_CROSSES_QUERY -> {
+              goingDown = true;
+              if (pointTree.moveToChild() == false) {
+                if (r == PointValues.Relation.CELL_CROSSES_QUERY) {
+                  pointTree.visitDocValues(this);
+                } else {
+                  pointTree.visitDocIDs(this);
+                }
+                updateMinMax(
+                    sortableBytesToLong(pointTree.getMinPackedValue()),
+                    sortableBytesToLong(pointTree.getMaxPackedValue()));
+                while (pointTree.moveToSibling() == false) {
+                  if (pointTree.moveToParent() == false) {
+                    return;
+                  } else {
+                    goingDown = false;
+                  }
+                }
               }
-              updateMinMax(
-                  sortableBytesToLong(pointTree.getMinPackedValue()),
-                  sortableBytesToLong(pointTree.getMaxPackedValue()));
             }
+            case CELL_OUTSIDE_QUERY -> {
+              if (goingDown == false) {
+                return;
+              }
+              if (pointTree.moveToSibling()) {
+                continue;
+              }
+              while (pointTree.moveToSibling() == false) {
+                if (pointTree.moveToParent() == false) {
+                  return;
+                }
+                goingDown = false;
+              }
+            }
+            default -> throw new IllegalStateException("unreachable code");
           }
-          case CELL_OUTSIDE_QUERY -> {}
-          default -> throw new IllegalStateException("unreachable code");
         }
       }
 

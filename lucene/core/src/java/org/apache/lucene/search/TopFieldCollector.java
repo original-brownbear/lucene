@@ -111,9 +111,13 @@ public abstract class TopFieldCollector extends TopDocsCollector<Entry> {
 
     void collectCompetitiveHit(int doc) throws IOException {
       // This hit is competitive - replace bottom element in queue & adjustTop
-      comparator.copy(bottom.slot, doc);
-      updateBottom(doc);
-      comparator.setBottom(bottom.slot);
+      var b = bottom;
+      comparator.copy(b.slot, doc);
+      // bottom.score is already set to Float.NaN in add().
+      b.doc = docBase + doc;
+      b = pq.updateTop();
+      comparator.setBottom(b.slot);
+      bottom = b;
       updateMinCompetitiveScore(scorer);
     }
 
@@ -439,12 +443,6 @@ public abstract class TopFieldCollector extends TopDocsCollector<Entry> {
     // on the current page) and slot = hitsCollected - 1.
     assert slot < numHits;
     queueFull = slot == numHits - 1;
-  }
-
-  final void updateBottom(int doc) {
-    // bottom.score is already set to Float.NaN in add().
-    bottom.doc = docBase + doc;
-    bottom = pq.updateTop();
   }
 
   /*
