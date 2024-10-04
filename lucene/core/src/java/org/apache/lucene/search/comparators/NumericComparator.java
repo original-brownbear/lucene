@@ -20,7 +20,6 @@ package org.apache.lucene.search.comparators;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.function.Consumer;
 import org.apache.lucene.index.DocValues;
 import org.apache.lucene.index.FieldInfo;
 import org.apache.lucene.index.LeafReaderContext;
@@ -403,9 +402,6 @@ public abstract class NumericComparator<T extends Number> extends FieldComparato
     class DisjunctionBuildVisitor extends RangeVisitor {
 
       final Deque<DisiAndMostCompetitiveValue> disis = new ArrayDeque<>();
-      // most competitive entry stored last.
-      final Consumer<DisiAndMostCompetitiveValue> adder =
-          reverse == false ? disis::addFirst : disis::addLast;
 
       final int minBlockLength = minBlockLength();
 
@@ -466,9 +462,6 @@ public abstract class NumericComparator<T extends Number> extends FieldComparato
               if (goingDown == false) {
                 return;
               }
-              if (pointTree.moveToSibling()) {
-                continue;
-              }
               while (pointTree.moveToSibling() == false) {
                 if (pointTree.moveToParent() == false) {
                   return;
@@ -505,7 +498,12 @@ public abstract class NumericComparator<T extends Number> extends FieldComparato
         }
         docs[index] = DocIdSetIterator.NO_MORE_DOCS;
         DocIdSetIterator iter = new IntArrayDocIdSet(docs, index).iterator();
-        adder.accept(new DisiAndMostCompetitiveValue(iter, mostCompetitiveValue));
+        var disi = new DisiAndMostCompetitiveValue(iter, mostCompetitiveValue);
+        if (reverse) {
+          disis.addLast(disi);
+        } else {
+          disis.addFirst(disi);
+        }
         docs = IntsRef.EMPTY_INTS;
         index = 0;
         blockMaxDoc = -1;
