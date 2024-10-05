@@ -57,127 +57,34 @@ public class DirectReader {
    */
   public static LongValues getInstance(RandomAccessInput slice, int bitsPerValue, long offset) {
     return switch (bitsPerValue) {
-      case 1 ->
-          index -> {
-            try {
-              int shift = (int) (index & 7);
-              return (slice.readByte(offset + (index >>> 3)) >>> shift) & 0x1;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
+      case 1 -> index -> (slice.readByte(offset + (index >>> 3)) >>> ((int) (index & 7))) & 0x1;
       case 2 ->
-          index -> {
-            try {
-              int shift = ((int) (index & 3)) << 1;
-              return (slice.readByte(offset + (index >>> 2)) >>> shift) & 0x3;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
+          index -> (slice.readByte(offset + (index >>> 2)) >>> (((int) (index & 3)) << 1)) & 0x3;
       case 4 ->
-          index -> {
-            try {
-              int shift = (int) (index & 1) << 2;
-              return (slice.readByte(offset + (index >>> 1)) >>> shift) & 0xF;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
-      case 8 ->
-          index -> {
-            try {
-              return slice.readByte(offset + index) & 0xFF;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
+          index -> (slice.readByte(offset + (index >>> 1)) >>> ((int) (index & 1) << 2)) & 0xF;
+      case 8 -> index -> slice.readByte(offset + index) & 0xFF;
       case 12 ->
-          index -> {
-            try {
-              long off = (index * 12) >>> 3;
-              int shift = (int) (index & 1) << 2;
-              return (slice.readShort(offset + off) >>> shift) & 0xFFF;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
-      case 16 ->
-          index -> {
-            try {
-              return slice.readShort(offset + (index << 1)) & 0xFFFF;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
+          index ->
+              (slice.readShort(offset + ((index * 12) >>> 3)) >>> ((int) (index & 1) << 2)) & 0xFFF;
+      case 16 -> index -> slice.readShort(offset + (index << 1)) & 0xFFFF;
       case 20 ->
           index -> {
-            try {
-              long off = (index * 20) >>> 3;
-              int shift = (int) (index & 1) << 2;
-              return (slice.readInt(offset + off) >>> shift) & 0xFFFFF;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
+            long off = (index * 20) >>> 3;
+            int shift = (int) (index & 1) << 2;
+            return (slice.readInt(offset + off) >>> shift) & 0xFFFFF;
           };
-      case 24 ->
-          index -> {
-            try {
-              return slice.readInt(offset + index * 3) & 0xFFFFFF;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
+      case 24 -> index -> slice.readInt(offset + index * 3) & 0xFFFFFF;
       case 28 ->
           index -> {
-            try {
-              long off = (index * 28) >>> 3;
-              int shift = (int) (index & 1) << 2;
-              return (slice.readInt(offset + off) >>> shift) & 0xFFFFFFF;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
+            long off = (index * 28) >>> 3;
+            int shift = (int) (index & 1) << 2;
+            return (slice.readInt(offset + off) >>> shift) & 0xFFFFFFF;
           };
-      case 32 ->
-          index -> {
-            try {
-              return slice.readInt(offset + (index << 2)) & 0xFFFFFFFFL;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
-      case 40 ->
-          index -> {
-            try {
-              return slice.readLong(offset + index * 5) & 0xFFFFFFFFFFL;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
-      case 48 ->
-          index -> {
-            try {
-              return slice.readLong(offset + index * 6) & 0xFFFFFFFFFFFFL;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
-      case 56 ->
-          index -> {
-            try {
-              return slice.readLong(offset + index * 7) & 0xFFFFFFFFFFFFFFL;
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
-      case 64 ->
-          index -> {
-            try {
-              return slice.readLong(offset + (index << 3));
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          };
+      case 32 -> index -> slice.readInt(offset + (index << 2)) & 0xFFFFFFFFL;
+      case 40 -> index -> slice.readLong(offset + index * 5) & 0xFFFFFFFFFFL;
+      case 48 -> index -> slice.readLong(offset + index * 6) & 0xFFFFFFFFFFFFL;
+      case 56 -> index -> slice.readLong(offset + index * 7) & 0xFFFFFFFFFFFFFFL;
+      case 64 -> index -> slice.readLong(offset + (index << 3));
       default -> throw new IllegalArgumentException("unsupported bitsPerValue: " + bitsPerValue);
     };
   }

@@ -119,7 +119,12 @@ final class FieldsIndexReader extends FieldsIndex {
   @Override
   long getBlockID(int docID) {
     Objects.checkIndex(docID, maxDoc);
-    long blockIndex = docs.binarySearch(0, numChunks, docID);
+    long blockIndex;
+    try {
+      blockIndex = docs.binarySearch(0, numChunks, docID);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
     if (blockIndex < 0) {
       blockIndex = -2 - blockIndex;
     }
@@ -128,7 +133,11 @@ final class FieldsIndexReader extends FieldsIndex {
 
   @Override
   long getBlockStartPointer(long blockIndex) {
-    return startPointers.get(blockIndex);
+    try {
+      return startPointers.get(blockIndex);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   @Override
@@ -137,7 +146,11 @@ final class FieldsIndexReader extends FieldsIndex {
     if (blockIndex == numChunks - 1) {
       endPointer = maxPointer;
     } else {
-      endPointer = startPointers.get(blockIndex + 1);
+      try {
+        endPointer = startPointers.get(blockIndex + 1);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
     return endPointer - getBlockStartPointer(blockIndex);
   }

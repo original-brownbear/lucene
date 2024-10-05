@@ -16,6 +16,8 @@
  */
 package org.apache.lucene.util;
 
+import java.io.IOException;
+
 /**
  * Abstraction over an array of longs.
  *
@@ -29,5 +31,5 @@ public interface LongValues {
   LongValues ZEROES = index -> 0;
 
   /** Get value at <code>index</code>. */
-  long get(long index);
+  long get(long index) throws IOException;
 }

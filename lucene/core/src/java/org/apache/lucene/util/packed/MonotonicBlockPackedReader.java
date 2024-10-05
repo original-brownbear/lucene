@@ -113,7 +113,7 @@ public class MonotonicBlockPackedReader implements LongValues, Accountable {
   }
 
   @Override
-  public long get(long index) {
+  public long get(long index) throws IOException {
     assert index >= 0 && index < valueCount;
     final int block = (int) (index >>> blockShift);
     final int idx = (int) (index & blockMask);

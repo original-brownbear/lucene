@@ -1003,7 +1003,11 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
 
         @Override
         public int ordValue() {
-          return (int) ords.get(doc);
+          try {
+            return (int) ords.get(doc);
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
         }
       };
     } else {
@@ -1045,7 +1049,11 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
 
         @Override
         public int ordValue() {
-          return (int) ords.get(disi.index());
+          try {
+            return (int) ords.get(disi.index());
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
         }
       };
     }
@@ -1494,11 +1502,15 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
 
         @Override
         public int docValueCount() {
-          set();
+          try {
+            set();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
           return count;
         }
 
-        private void set() {
+        private void set() throws IOException {
           if (set == false) {
             final int index = disi.index();
             start = addresses.get(index);
@@ -1623,7 +1635,7 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
           return disi.advanceExact(target);
         }
 
-        private void set() {
+        private void set() throws IOException {
           if (set == false) {
             final int index = disi.index();
             curr = addresses.get(index);
@@ -1641,7 +1653,11 @@ final class Lucene80DocValuesProducer extends DocValuesProducer {
 
         @Override
         public int docValueCount() {
-          set();
+          try {
+            set();
+          } catch (IOException e) {
+            throw new RuntimeException(e);
+          }
           return count;
         }
       };

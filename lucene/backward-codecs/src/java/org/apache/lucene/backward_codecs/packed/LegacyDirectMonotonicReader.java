@@ -134,7 +134,7 @@ public final class LegacyDirectMonotonicReader implements LongValues, Accountabl
   }
 
   @Override
-  public long get(long index) {
+  public long get(long index) throws IOException {
     final int block = (int) (index >>> blockShift);
     final long blockIndex = index & ((1 << blockShift) - 1);
     final long delta = readers[block].get(blockIndex);
@@ -160,7 +160,7 @@ public final class LegacyDirectMonotonicReader implements LongValues, Accountabl
    *
    * @see Arrays#binarySearch(long[], int, int, long)
    */
-  public long binarySearch(long fromIndex, long toIndex, long key) {
+  public long binarySearch(long fromIndex, long toIndex, long key) throws IOException {
     if (fromIndex < 0 || fromIndex > toIndex) {
       throw new IllegalArgumentException("fromIndex=" + fromIndex + ",toIndex=" + toIndex);
     }

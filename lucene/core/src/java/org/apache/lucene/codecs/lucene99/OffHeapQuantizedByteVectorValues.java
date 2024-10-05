@@ -305,7 +305,11 @@ public abstract class OffHeapQuantizedByteVectorValues extends QuantizedByteVect
 
     @Override
     public int ordToDoc(int ord) {
-      return (int) ordToDoc.get(ord);
+      try {
+        return (int) ordToDoc.get(ord);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
 
     @Override

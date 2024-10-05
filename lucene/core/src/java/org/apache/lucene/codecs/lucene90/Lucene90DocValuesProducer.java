@@ -1477,8 +1477,12 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         private void set() {
           if (set == false) {
             final int index = disi.index();
-            start = addresses.get(index);
-            end = addresses.get(index + 1L);
+            try {
+              start = addresses.get(index);
+              end = addresses.get(index + 1L);
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
             count = (int) (end - start);
             set = true;
           }
@@ -1632,9 +1636,13 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           private void set() {
             if (set == false) {
               final int index = disi.index();
-              curr = addresses.get(index);
-              long end = addresses.get(index + 1L);
-              count = (int) (end - curr);
+              try {
+                curr = addresses.get(index);
+                long end = addresses.get(index + 1L);
+                count = (int) (end - curr);
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
               set = true;
             }
           }

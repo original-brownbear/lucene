@@ -164,7 +164,7 @@ public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
     }
 
     @Override
-    public long seek(BytesRef target) {
+    public long seek(BytesRef target) throws IOException {
       long lo = 0; // binary search
       long hi = fieldIndex.numIndexTerms - 1;
 
@@ -201,7 +201,7 @@ public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
     }
 
     @Override
-    public long next() {
+    public long next() throws IOException {
       final long idx = 1 + (ord / indexInterval);
       if (idx >= fieldIndex.numIndexTerms) {
         return -1;
@@ -220,7 +220,7 @@ public class FixedGapTermsIndexReader extends TermsIndexReaderBase {
     }
 
     @Override
-    public long seek(long ord) {
+    public long seek(long ord) throws IOException {
       long idx = ord / indexInterval;
       // caller must ensure ord is in bounds
       assert idx < fieldIndex.numIndexTerms;

@@ -759,7 +759,8 @@ public final class Lucene90CompressingTermVectorsReader extends TermVectorsReade
   }
 
   // field -> term index -> position index
-  private int[][] positionIndex(int skip, int numFields, LongValues numTerms, int[] termFreqs) {
+  private int[][] positionIndex(int skip, int numFields, LongValues numTerms, int[] termFreqs)
+      throws IOException {
     final int[][] positionIndex = new int[numFields][];
     int termIndex = 0;
     for (int i = 0; i < skip; ++i) {

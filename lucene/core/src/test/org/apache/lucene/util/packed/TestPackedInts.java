@@ -673,7 +673,7 @@ public class TestPackedInts extends LuceneTestCase {
     assertEquals(RamUsageTester.ramUsed(wrt), wrt.ramBytesUsed());
   }
 
-  public void testPagedGrowableWriter() {
+  public void testPagedGrowableWriter() throws IOException {
     Random random = random();
     int pageSize = 1 << (TestUtil.nextInt(random, 6, 30));
     // supports 0 values?
@@ -731,7 +731,7 @@ public class TestPackedInts extends LuceneTestCase {
     }
   }
 
-  public void testPagedMutable() {
+  public void testPagedMutable() throws IOException {
     Random random = random();
     final int bitsPerValue = TestUtil.nextInt(random, 1, 64);
     final long max = PackedInts.maxValue(bitsPerValue);

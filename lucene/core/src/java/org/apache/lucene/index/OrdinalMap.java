@@ -397,12 +397,12 @@ public class OrdinalMap implements Accountable {
    * Given global ordinal, returns the ordinal of the first segment which contains this ordinal (the
    * corresponding to the segment return {@link #getFirstSegmentNumber}).
    */
-  public long getFirstSegmentOrd(long globalOrd) {
+  public long getFirstSegmentOrd(long globalOrd) throws IOException {
     return globalOrd - globalOrdDeltas.get(globalOrd);
   }
 
   /** Given a global ordinal, returns the index of the first segment that contains this term. */
-  public int getFirstSegmentNumber(long globalOrd) {
+  public int getFirstSegmentNumber(long globalOrd) throws IOException {
     return segmentMap.newToOld((int) firstSegments.get(globalOrd));
   }
 
