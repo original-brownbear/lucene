@@ -649,7 +649,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
   private LongValues getNumericValues(NumericEntry entry) throws IOException {
     if (entry.bitsPerValue == 0) {
-      return index -> entry.minValue;
+      final long minValue = entry.minValue;
+      return index -> minValue;
     } else {
       final RandomAccessInput slice =
           data.randomAccessSlice(entry.valuesOffset, entry.valuesLength);
@@ -660,13 +661,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       }
       if (entry.blockShift >= 0) {
         final VaryingBPVReader vBPVReader = new VaryingBPVReader(entry, slice);
-        return index -> {
-          try {
-            return vBPVReader.getLongValue(index);
-          } catch (IOException e) {
-            throw new RuntimeException(e);
-          }
-        };
+        return vBPVReader::getLongValue;
       } else {
         final LongValues values =
             getDirectReaderInstance(slice, entry.bitsPerValue, 0L, entry.numValues);
