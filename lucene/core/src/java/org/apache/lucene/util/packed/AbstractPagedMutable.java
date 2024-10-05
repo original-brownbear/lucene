@@ -29,8 +29,8 @@ import org.apache.lucene.util.RamUsageEstimator;
  *
  * @lucene.internal
  */
-public abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>> extends LongValues
-    implements Accountable {
+public abstract class AbstractPagedMutable<T extends AbstractPagedMutable<T>>
+    implements LongValues, Accountable {
 
   static final int MIN_BLOCK_SIZE = 1 << 6;
   static final int MAX_BLOCK_SIZE = 1 << 30;

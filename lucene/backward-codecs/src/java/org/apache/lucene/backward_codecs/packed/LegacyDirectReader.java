@@ -89,7 +89,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader1 extends LongValues {
+  static final class DirectPackedReader1 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -109,7 +109,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader2 extends LongValues {
+  static final class DirectPackedReader2 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -129,7 +129,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader4 extends LongValues {
+  static final class DirectPackedReader4 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -149,7 +149,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader8 extends LongValues {
+  static final class DirectPackedReader8 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -168,7 +168,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader12 extends LongValues {
+  static final class DirectPackedReader12 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -189,7 +189,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader16 extends LongValues {
+  static final class DirectPackedReader16 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -208,7 +208,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader20 extends LongValues {
+  static final class DirectPackedReader20 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -231,7 +231,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader24 extends LongValues {
+  static final class DirectPackedReader24 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -250,7 +250,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader28 extends LongValues {
+  static final class DirectPackedReader28 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -271,7 +271,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader32 extends LongValues {
+  static final class DirectPackedReader32 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -290,7 +290,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader40 extends LongValues {
+  static final class DirectPackedReader40 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -309,7 +309,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader48 extends LongValues {
+  static final class DirectPackedReader48 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -328,7 +328,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader56 extends LongValues {
+  static final class DirectPackedReader56 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
@@ -347,7 +347,7 @@ public class LegacyDirectReader {
     }
   }
 
-  static final class DirectPackedReader64 extends LongValues {
+  static final class DirectPackedReader64 implements LongValues {
     final RandomAccessInput in;
     final long offset;
 
