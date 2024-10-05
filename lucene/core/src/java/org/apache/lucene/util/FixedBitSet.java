@@ -227,7 +227,7 @@ public final class FixedBitSet extends BitSet {
 
   @Override
   public boolean get(int index) {
-    assert index >= 0 && index < numBits : "index=" + index + ", numBits=" + numBits;
+    assert assertValidIndex(index);
     int i = index >> 6; // div 64
     // signed shift will keep a negative index and force an
     // array-index-out-of-bounds-exception, removing the need for an explicit check.
@@ -237,7 +237,7 @@ public final class FixedBitSet extends BitSet {
 
   @Override
   public void set(int index) {
-    assert index >= 0 && index < numBits : "index=" + index + ", numBits=" + numBits;
+    assert assertValidIndex(index);
     int wordNum = index >> 6; // div 64
     long bitmask = 1L << index;
     bits[wordNum] |= bitmask;
@@ -245,24 +245,25 @@ public final class FixedBitSet extends BitSet {
 
   @Override
   public boolean getAndSet(int index) {
-    assert index >= 0 && index < numBits : "index=" + index + ", numBits=" + numBits;
+    assert assertValidIndex(index);
     int wordNum = index >> 6; // div 64
     long bitmask = 1L << index;
-    boolean val = (bits[wordNum] & bitmask) != 0;
-    bits[wordNum] |= bitmask;
+    long[] bitsRef = bits;
+    boolean val = (bitsRef[wordNum] & bitmask) != 0;
+    bitsRef[wordNum] |= bitmask;
     return val;
   }
 
   @Override
   public void clear(int index) {
-    assert index >= 0 && index < numBits : "index=" + index + ", numBits=" + numBits;
+    assert assertValidIndex(index);
     int wordNum = index >> 6;
     long bitmask = 1L << index;
     bits[wordNum] &= ~bitmask;
   }
 
   public boolean getAndClear(int index) {
-    assert index >= 0 && index < numBits : "index=" + index + ", numBits=" + numBits;
+    assert assertValidIndex(index);
     int wordNum = index >> 6; // div 64
     long bitmask = 1L << index;
     boolean val = (bits[wordNum] & bitmask) != 0;
@@ -290,11 +291,12 @@ public final class FixedBitSet extends BitSet {
    */
   private int nextSetBitInRange(int start, int upperBound) {
     // Depends on the ghost bits being clear!
-    assert start >= 0 && start < numBits : "index=" + start + ", numBits=" + numBits;
+    assert assertValidIndex(start);
     assert start < upperBound : "index=" + start + ", upperBound=" + upperBound;
     assert upperBound <= numBits : "upperBound=" + upperBound + ", numBits=" + numBits;
     int i = start >> 6;
-    long word = bits[i] >> start; // skip all the bits to the right of index
+    final long[] bitsRef = bits;
+    long word = bitsRef[i] >> start; // skip all the bits to the right of index
 
     if (word != 0) {
       return start + Long.numberOfTrailingZeros(word);
@@ -302,7 +304,7 @@ public final class FixedBitSet extends BitSet {
 
     int limit = upperBound == numBits ? numWords : bits2words(upperBound);
     while (++i < limit) {
-      word = bits[i];
+      word = bitsRef[i];
       if (word != 0) {
         return (i << 6) + Long.numberOfTrailingZeros(word);
       }
@@ -482,8 +484,8 @@ public final class FixedBitSet extends BitSet {
    * @param endIndex one-past the last bit to flip
    */
   public void flip(int startIndex, int endIndex) {
-    assert startIndex >= 0 && startIndex < numBits;
-    assert endIndex >= 0 && endIndex <= numBits;
+    assert assertValidIndex(startIndex);
+    assert assertValidIndex(endIndex);
     if (endIndex <= startIndex) {
       return;
     }
@@ -517,7 +519,7 @@ public final class FixedBitSet extends BitSet {
 
   /** Flip the bit at the provided index. */
   public void flip(int index) {
-    assert index >= 0 && index < numBits : "index=" + index + " numBits=" + numBits;
+    assert assertValidIndex(index);
     int wordNum = index >> 6; // div 64
     long bitmask = 1L << index; // mod 64 is implicit
     bits[wordNum] ^= bitmask;
@@ -530,9 +532,8 @@ public final class FixedBitSet extends BitSet {
    * @param endIndex one-past the last bit to set
    */
   public void set(int startIndex, int endIndex) {
-    assert startIndex >= 0 && startIndex < numBits
-        : "startIndex=" + startIndex + ", numBits=" + numBits;
-    assert endIndex >= 0 && endIndex <= numBits : "endIndex=" + endIndex + ", numBits=" + numBits;
+    assert assertValidIndex(startIndex);
+    assert assertValidIndex(endIndex);
     if (endIndex <= startIndex) {
       return;
     }
@@ -555,9 +556,8 @@ public final class FixedBitSet extends BitSet {
 
   @Override
   public void clear(int startIndex, int endIndex) {
-    assert startIndex >= 0 && startIndex < numBits
-        : "startIndex=" + startIndex + ", numBits=" + numBits;
-    assert endIndex >= 0 && endIndex <= numBits : "endIndex=" + endIndex + ", numBits=" + numBits;
+    assert assertValidIndex(startIndex);
+    assert assertValidIndex(endIndex);
     if (endIndex <= startIndex) {
       return;
     }
@@ -649,5 +649,10 @@ public final class FixedBitSet extends BitSet {
    */
   public Bits asReadOnlyBits() {
     return new FixedBits(bits, numBits);
+  }
+
+  private boolean assertValidIndex(int index) {
+    assert index >= 0 && index < numBits : "index=" + index + ", numBits=" + numBits;
+    return true;
   }
 }
