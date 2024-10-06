@@ -553,7 +553,7 @@ public final class Lucene90CompressingStoredFieldsReader extends StoredFieldsRea
       final DataInput documentInput;
       if (length == 0) {
         // empty
-        documentInput = new ByteArrayDataInput();
+        documentInput = IndexInput.Empty.INSTANCE;
       } else if (merging) {
         // already decompressed
         documentInput = new ByteArrayDataInput(bytes.bytes, bytes.offset + offset, length);
