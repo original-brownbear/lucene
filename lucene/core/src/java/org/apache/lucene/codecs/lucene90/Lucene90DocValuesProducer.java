@@ -649,12 +649,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
   private LongValues getNumericValues(NumericEntry entry) throws IOException {
     if (entry.bitsPerValue == 0) {
-      return new LongValues() {
-        @Override
-        public long get(long index) {
-          return entry.minValue;
-        }
-      };
+      return LongValues.ofConstant(entry.minValue);
     } else {
       final RandomAccessInput slice =
           data.randomAccessSlice(entry.valuesOffset, entry.valuesLength);
@@ -696,17 +691,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
               return values.get(index) * gcd + minValue;
             }
           };
-        } else if (entry.minValue != 0) {
-          final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) + minValue;
-            }
-          };
-        } else {
-          return values;
         }
+        return values.add(entry.minValue);
       }
     }
   }
@@ -824,7 +810,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           addressesData.prefetch(0, 1);
         }
         final LongValues addresses =
-            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData, merging);
+            DirectMonotonicReader.getLongValues(entry.addressesMeta, addressesData, merging);
         return new DenseBinaryDocValues(maxDoc) {
           final BytesRef bytes = new BytesRef(new byte[entry.maxLength], 0, entry.maxLength);
 
@@ -871,7 +857,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           addressesData.prefetch(0, 1);
         }
         final LongValues addresses =
-            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData);
+            DirectMonotonicReader.getLongValues(entry.addressesMeta, addressesData);
         return new SparseBinaryDocValues(disi) {
           final BytesRef bytes = new BytesRef(new byte[entry.maxLength], 0, entry.maxLength);
 
@@ -1139,13 +1125,13 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       RandomAccessInput addressesSlice =
           data.randomAccessSlice(entry.termsAddressesOffset, entry.termsAddressesLength);
       blockAddresses =
-          DirectMonotonicReader.getInstance(entry.termsAddressesMeta, addressesSlice, merging);
+          DirectMonotonicReader.getLongValues(entry.termsAddressesMeta, addressesSlice, merging);
       bytes = data.slice("terms", entry.termsDataOffset, entry.termsDataLength);
       blockMask = (1L << TERMS_DICT_BLOCK_LZ4_SHIFT) - 1;
       RandomAccessInput indexAddressesSlice =
           data.randomAccessSlice(entry.termsIndexAddressesOffset, entry.termsIndexAddressesLength);
       indexAddresses =
-          DirectMonotonicReader.getInstance(
+          DirectMonotonicReader.getLongValues(
               entry.termsIndexAddressesMeta, indexAddressesSlice, merging);
       indexBytes = data.slice("terms-index", entry.termsIndexOffset, entry.termsIndexLength);
       term = new BytesRef(entry.maxTermLength);
@@ -1385,7 +1371,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       addressesInput.prefetch(0, 1);
     }
     final LongValues addresses =
-        DirectMonotonicReader.getInstance(entry.addressesMeta, addressesInput, merging);
+        DirectMonotonicReader.getLongValues(entry.addressesMeta, addressesInput, merging);
 
     final LongValues values = getNumericValues(entry);
 
@@ -1533,7 +1519,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         addressesInput.prefetch(0, 1);
       }
       final LongValues addresses =
-          DirectMonotonicReader.getInstance(ordsEntry.addressesMeta, addressesInput);
+          DirectMonotonicReader.getLongValues(ordsEntry.addressesMeta, addressesInput);
 
       final RandomAccessInput slice =
           data.randomAccessSlice(ordsEntry.valuesOffset, ordsEntry.valuesLength);

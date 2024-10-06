@@ -42,6 +42,61 @@ public abstract class LongValues {
         }
       };
 
+  public static LongValues linear(float slope, long intercept) {
+    if (slope == 0f) {
+      return ofConstant(intercept);
+    }
+    if (intercept == 0L && slope == 1f) {
+      return IDENTITY.add(intercept);
+    }
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return (long) (slope * index) + intercept;
+      }
+    };
+  }
+
+  public static LongValues ofConstant(long value) {
+    if (value == 0) {
+      return ZEROES;
+    }
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return value;
+      }
+
+      @Override
+      public LongValues add(long added) {
+        if (added == 0) {
+          return this;
+        }
+        return ofConstant(value + added);
+      }
+    };
+  }
+
+  public LongValues add(long shift) {
+    if (shift == 0) {
+      return this;
+    }
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return LongValues.this.get(index) + shift;
+      }
+
+      @Override
+      public LongValues add(long added) {
+        if (added == 0) {
+          return this;
+        }
+        return LongValues.this.add(shift + added);
+      }
+    };
+  }
+
   /** Get value at <code>index</code>. */
   public abstract long get(long index);
 }

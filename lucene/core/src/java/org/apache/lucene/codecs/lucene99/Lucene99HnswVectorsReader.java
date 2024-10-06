@@ -44,10 +44,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
 import org.apache.lucene.store.ReadAdvice;
-import org.apache.lucene.util.Bits;
-import org.apache.lucene.util.IOSupplier;
-import org.apache.lucene.util.IOUtils;
-import org.apache.lucene.util.RamUsageEstimator;
+import org.apache.lucene.util.*;
 import org.apache.lucene.util.hnsw.HnswGraph;
 import org.apache.lucene.util.hnsw.HnswGraphSearcher;
 import org.apache.lucene.util.hnsw.OrdinalTranslatedKnnCollector;
@@ -427,7 +424,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
     int arcCount;
     int arcUpTo;
     int arc;
-    private final DirectMonotonicReader graphLevelNodeOffsets;
+    private final LongValues graphLevelNodeOffsets;
     private final long[] graphLevelNodeIndexOffsets;
     // Allocated to be M*2 to track the current neighbors being explored
     private final int[] currentNeighborsBuffer;
@@ -442,7 +439,7 @@ public final class Lucene99HnswVectorsReader extends KnnVectorsReader
       final RandomAccessInput addressesData =
           vectorIndex.randomAccessSlice(entry.offsetsOffset, entry.offsetsLength);
       this.graphLevelNodeOffsets =
-          DirectMonotonicReader.getInstance(entry.offsetsMeta, addressesData);
+          DirectMonotonicReader.getLongValues(entry.offsetsMeta, addressesData);
       this.currentNeighborsBuffer = new int[entry.M * 2];
       graphLevelNodeIndexOffsets = new long[numLevels];
       graphLevelNodeIndexOffsets[0] = 0;

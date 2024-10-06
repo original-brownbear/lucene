@@ -59,6 +59,9 @@ public final class DirectMonotonicReader extends LongValues {
     }
   }
 
+  private static final DirectMonotonicReader SINGLE_ZERO_BLOCK_READER =
+      createInstance(Meta.SINGLE_ZERO_BLOCK, null, false);
+
   /**
    * Load metadata from the given {@link IndexInput}.
    *
@@ -90,7 +93,15 @@ public final class DirectMonotonicReader extends LongValues {
 
   /** Retrieves an instance from the specified slice. */
   public static DirectMonotonicReader getInstance(
-      Meta meta, RandomAccessInput data, boolean merging) throws IOException {
+      Meta meta, RandomAccessInput data, boolean merging) {
+    if (meta == Meta.SINGLE_ZERO_BLOCK) {
+      return SINGLE_ZERO_BLOCK_READER;
+    }
+    return createInstance(meta, data, merging);
+  }
+
+  private static DirectMonotonicReader createInstance(
+      Meta meta, RandomAccessInput data, boolean merging) {
     final LongValues[] readers = new LongValues[meta.numBlocks];
     for (int i = 0; i < meta.numBlocks; ++i) {
       if (meta.bpvs[i] == 0) {
@@ -107,6 +118,53 @@ public final class DirectMonotonicReader extends LongValues {
     }
 
     return new DirectMonotonicReader(meta.blockShift, readers, meta.mins, meta.avgs, meta.bpvs);
+  }
+
+  public static LongValues getLongValues(Meta meta, RandomAccessInput data) {
+    return getLongValues(meta, data, false);
+  }
+
+  public static LongValues getLongValues(Meta meta, RandomAccessInput data, boolean merging) {
+    if (meta == Meta.SINGLE_ZERO_BLOCK) {
+      return ZEROES;
+    }
+    boolean allValuesZero = true;
+    for (byte bpv : meta.bpvs) {
+      if (bpv != 0) {
+        allValuesZero = false;
+        break;
+      }
+    }
+    if (allValuesZero) {
+      if (meta.numBlocks == 1) {
+        return LongValues.linear(meta.avgs[0], meta.mins[0]);
+      } else {
+        long[] mins = meta.mins;
+        float[] avgs = meta.avgs;
+        int blockShift = meta.blockShift;
+        long blockMask = (1L << blockShift) - 1;
+        return new LongValues() {
+          @Override
+          public long get(long index) {
+            final int block = (int) (index >>> blockShift);
+            final long blockIndex = index & blockMask;
+            return mins[block] + (long) (avgs[block] * blockIndex);
+          }
+        };
+      }
+    }
+    if (meta.numBlocks == 1) {
+      var reader = DirectReader.getInstance(data, meta.bpvs[0], meta.offsets[0]);
+      long min = meta.mins[0];
+      float avg = meta.avgs[0];
+      return new LongValues() {
+        @Override
+        public long get(long index) {
+          return min + (long) (avg * index) + reader.get(index);
+        }
+      };
+    }
+    return getInstance(meta, data, merging);
   }
 
   private final int blockShift;
