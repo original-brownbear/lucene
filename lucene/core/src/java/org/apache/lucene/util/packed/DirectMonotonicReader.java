@@ -43,7 +43,6 @@ public final class DirectMonotonicReader extends LongValues {
     private final long[] mins;
     private final float[] avgs;
     private final byte[] bpvs;
-    private final long[] offsets;
 
     Meta(long numValues, int blockShift) {
       this.blockShift = blockShift;
@@ -55,7 +54,6 @@ public final class DirectMonotonicReader extends LongValues {
       this.mins = new long[this.numBlocks];
       this.avgs = new float[this.numBlocks];
       this.bpvs = new byte[this.numBlocks];
-      this.offsets = new long[this.numBlocks];
     }
   }
 
@@ -76,7 +74,7 @@ public final class DirectMonotonicReader extends LongValues {
       meta.mins[i] = min;
       int avgInt = metaIn.readInt();
       meta.avgs[i] = Float.intBitsToFloat(avgInt);
-      meta.offsets[i] = metaIn.readLong();
+      metaIn.skipBytes(Long.BYTES);
       byte bpvs = metaIn.readByte();
       meta.bpvs[i] = bpvs;
       allValuesZero = allValuesZero && min == 0L && avgInt == 0 && bpvs == 0;
@@ -103,17 +101,30 @@ public final class DirectMonotonicReader extends LongValues {
   private static DirectMonotonicReader createInstance(
       Meta meta, RandomAccessInput data, boolean merging) {
     final LongValues[] readers = new LongValues[meta.numBlocks];
+    long offset = 0L;
     for (int i = 0; i < meta.numBlocks; ++i) {
-      if (meta.bpvs[i] == 0) {
+      byte bpvs = meta.bpvs[i];
+      if (bpvs == 0) {
         readers[i] = LongValues.ZEROES;
       } else if (merging
           && i < meta.numBlocks - 1 // we only know the number of values for the last block
           && meta.blockShift >= DirectReader.MERGE_BUFFER_SHIFT) {
-        readers[i] =
-            DirectReader.getMergeInstance(
-                data, meta.bpvs[i], meta.offsets[i], 1L << meta.blockShift);
+        readers[i] = DirectReader.getMergeInstance(data, bpvs, offset, 1L << meta.blockShift);
       } else {
-        readers[i] = DirectReader.getInstance(data, meta.bpvs[i], meta.offsets[i]);
+        readers[i] = DirectReader.getInstance(data, bpvs, offset);
+      }
+      if (bpvs > 0) {
+        int paddingBitsNeeded;
+        if (bpvs > Integer.SIZE) {
+          paddingBitsNeeded = Long.SIZE - bpvs;
+        } else if (bpvs > Short.SIZE) {
+          paddingBitsNeeded = Integer.SIZE - bpvs;
+        } else if (bpvs > Byte.SIZE) {
+          paddingBitsNeeded = Short.SIZE - bpvs;
+        } else {
+          paddingBitsNeeded = 0;
+        }
+        offset += (((1L << meta.blockShift) * bpvs) + paddingBitsNeeded + 7) / 8;
       }
     }
 
@@ -154,7 +165,7 @@ public final class DirectMonotonicReader extends LongValues {
       }
     }
     if (meta.numBlocks == 1) {
-      var reader = DirectReader.getInstance(data, meta.bpvs[0], meta.offsets[0]);
+      var reader = DirectReader.getInstance(data, meta.bpvs[0], 0);
       long min = meta.mins[0];
       float avg = meta.avgs[0];
       return new LongValues() {
