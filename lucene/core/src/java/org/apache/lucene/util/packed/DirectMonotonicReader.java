@@ -59,6 +59,9 @@ public final class DirectMonotonicReader extends LongValues {
     }
   }
 
+  private static final DirectMonotonicReader SINGLE_ZERO_BLOCK_READER =
+      createInstance(Meta.SINGLE_ZERO_BLOCK, IndexInput.Empty.INSTANCE, false);
+
   /**
    * Load metadata from the given {@link IndexInput}.
    *
@@ -91,6 +94,14 @@ public final class DirectMonotonicReader extends LongValues {
   /** Retrieves an instance from the specified slice. */
   public static DirectMonotonicReader getInstance(
       Meta meta, RandomAccessInput data, boolean merging) throws IOException {
+    if (meta == Meta.SINGLE_ZERO_BLOCK) {
+      return SINGLE_ZERO_BLOCK_READER;
+    }
+    return createInstance(meta, data, merging);
+  }
+
+  private static DirectMonotonicReader createInstance(
+      Meta meta, RandomAccessInput data, boolean merging) {
     final LongValues[] readers = new LongValues[meta.numBlocks];
     for (int i = 0; i < meta.numBlocks; ++i) {
       if (meta.bpvs[i] == 0) {

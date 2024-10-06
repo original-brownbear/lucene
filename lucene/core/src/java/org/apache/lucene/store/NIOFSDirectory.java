@@ -152,6 +152,9 @@ public class NIOFSDirectory extends FSDirectory {
                 + ": "
                 + this);
       }
+      if (length == 0) {
+        return Empty.INSTANCE;
+      }
       return new NIOFSIndexInput(
           getFullSliceDescription(sliceDescription),
           channel,

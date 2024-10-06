@@ -548,6 +548,15 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             }
           };
         } else {
+          if (slice.length() == 0) {
+            return new DenseNumericDocValues(maxDoc) {
+
+              @Override
+              public long longValue() throws IOException {
+                return 0;
+              }
+            };
+          }
           final LongValues values =
               getDirectReaderInstance(slice, entry.bitsPerValue, 0L, entry.numValues);
           if (entry.table != null) {

@@ -179,7 +179,11 @@ public class TestMultiMMap extends BaseChunkedDirectoryTestCase {
       // slice test (offset 0)
       int sliceSize = random().nextInt(size);
       IndexInput slice = ii.slice("slice", 0, sliceSize);
-      assertCorrectImpl(sliceSize < chunkSize, slice);
+      if (sliceSize == 0) {
+        assertSame(IndexInput.Empty.INSTANCE, slice);
+      } else {
+        assertCorrectImpl(sliceSize < chunkSize, slice);
+      }
 
       // slice test (offset > 0 )
       int offset = random().nextInt(size - 1) + 1;
@@ -187,7 +191,11 @@ public class TestMultiMMap extends BaseChunkedDirectoryTestCase {
       slice = ii.slice("slice", offset, sliceSize);
       // System.out.println(offset + "/" + sliceSize + " chunkSize=" + chunkSize + " " +
       // slice.getClass());
-      assertCorrectImpl(offset % chunkSize + sliceSize < chunkSize, slice);
+      if (sliceSize == 0) {
+        assertSame(IndexInput.Empty.INSTANCE, slice);
+      } else {
+        assertCorrectImpl(offset % chunkSize + sliceSize < chunkSize, slice);
+      }
 
       ii.close();
       mmapDir.close();
