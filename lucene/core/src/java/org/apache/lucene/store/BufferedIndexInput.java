@@ -364,6 +364,9 @@ public abstract class BufferedIndexInput extends IndexInput implements RandomAcc
 
   @Override
   public IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
+    if (length == 0) {
+      return Empty.INSTANCE;
+    }
     return wrap(sliceDescription, this, offset, length);
   }
 

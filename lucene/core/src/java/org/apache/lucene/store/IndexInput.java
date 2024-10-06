@@ -155,6 +155,9 @@ public abstract class IndexInput extends DataInput implements Closeable {
    * implements absolute reads as seek+read.
    */
   public RandomAccessInput randomAccessSlice(long offset, long length) throws IOException {
+    if (length == 0) {
+      return Empty.INSTANCE;
+    }
     final IndexInput slice = slice("randomaccess", offset, length);
     if (slice instanceof RandomAccessInput) {
       // slice() already supports random access
@@ -222,4 +225,79 @@ public abstract class IndexInput extends DataInput implements Closeable {
    * @param length the number of bytes to prefetch
    */
   public void prefetch(long offset, long length) throws IOException {}
+
+  /** Zero length singleton implementation. */
+  public static final class Empty extends IndexInput implements RandomAccessInput {
+
+    public static final Empty INSTANCE = new Empty();
+
+    private Empty() {
+      super("EMPTY");
+    }
+
+    @Override
+    public void close() throws IOException {}
+
+    @Override
+    public long getFilePointer() {
+      return 0;
+    }
+
+    @Override
+    public void seek(long pos) throws IOException {
+      if (pos != 0) {
+        throw new ArrayIndexOutOfBoundsException();
+      }
+    }
+
+    @Override
+    public long length() {
+      return 0;
+    }
+
+    @Override
+    public byte readByte(long pos) throws IOException {
+      throw new ArrayIndexOutOfBoundsException();
+    }
+
+    @Override
+    public short readShort(long pos) throws IOException {
+      throw new ArrayIndexOutOfBoundsException();
+    }
+
+    @Override
+    public int readInt(long pos) throws IOException {
+      throw new ArrayIndexOutOfBoundsException();
+    }
+
+    @Override
+    public long readLong(long pos) throws IOException {
+      throw new ArrayIndexOutOfBoundsException();
+    }
+
+    @Override
+    public IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
+      if (length != 0 || offset != 0) {
+        throw new ArrayIndexOutOfBoundsException();
+      }
+      return this;
+    }
+
+    @Override
+    public byte readByte() throws IOException {
+      throw new ArrayIndexOutOfBoundsException();
+    }
+
+    @Override
+    public void readBytes(byte[] b, int offset, int len) throws IOException {
+      if (len != 0) {
+        throw new ArrayIndexOutOfBoundsException();
+      }
+    }
+
+    @Override
+    public IndexInput clone() {
+      return this;
+    }
+  }
 }

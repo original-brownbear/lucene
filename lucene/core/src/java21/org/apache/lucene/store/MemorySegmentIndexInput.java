@@ -545,7 +545,7 @@ abstract class MemorySegmentIndexInput extends IndexInput
    * is seeked to the beginning.
    */
   @Override
-  public final MemorySegmentIndexInput slice(String sliceDescription, long offset, long length) {
+  public final IndexInput slice(String sliceDescription, long offset, long length) {
     if (offset < 0 || length < 0 || offset + length > this.length) {
       throw new IllegalArgumentException(
           "slice() "
@@ -559,22 +559,25 @@ abstract class MemorySegmentIndexInput extends IndexInput
               + ": "
               + this);
     }
-
+    if (length == 0) {
+      return Empty.INSTANCE;
+    }
     return buildSlice(sliceDescription, offset, length);
   }
 
   @Override
-  public final MemorySegmentIndexInput slice(
+  public final IndexInput slice(
       String sliceDescription, long offset, long length, ReadAdvice advice) throws IOException {
-    MemorySegmentIndexInput slice = slice(sliceDescription, offset, length);
-    if (NATIVE_ACCESS.isPresent()) {
+    IndexInput slice = slice(sliceDescription, offset, length);
+    if (length > 0 && NATIVE_ACCESS.isPresent()) {
       final NativeAccess nativeAccess = NATIVE_ACCESS.get();
-      slice.advise(
-          0,
-          slice.length,
-          segment -> {
-            nativeAccess.madvise(segment, advice);
-          });
+      ((MemorySegmentIndexInput) slice)
+          .advise(
+              0,
+              length,
+              segment -> {
+                nativeAccess.madvise(segment, advice);
+              });
     }
     return slice;
   }

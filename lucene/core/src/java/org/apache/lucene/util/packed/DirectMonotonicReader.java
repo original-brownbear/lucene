@@ -60,7 +60,7 @@ public final class DirectMonotonicReader extends LongValues {
   }
 
   private static final DirectMonotonicReader SINGLE_ZERO_BLOCK_READER =
-      createInstance(Meta.SINGLE_ZERO_BLOCK, null, false);
+      createInstance(Meta.SINGLE_ZERO_BLOCK, IndexInput.Empty.INSTANCE, false);
 
   /**
    * Load metadata from the given {@link IndexInput}.

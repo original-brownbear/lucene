@@ -80,6 +80,9 @@ final class EndiannessReverserIndexInput extends FilterIndexInput {
 
   @Override
   public RandomAccessInput randomAccessSlice(long offset, long length) throws IOException {
+    if (length == 0) {
+      return Empty.INSTANCE;
+    }
     return new EndiannessReverserRandomAccessInput(in.randomAccessSlice(offset, length));
   }
 
