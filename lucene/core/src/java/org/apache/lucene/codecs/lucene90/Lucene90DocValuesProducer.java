@@ -523,10 +523,11 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     } else if (entry.docsWithFieldOffset == -1) {
       // dense
       if (entry.bitsPerValue == 0) {
+        long minValue = entry.minValue;
         return new DenseNumericDocValues(maxDoc) {
           @Override
           public long longValue() throws IOException {
-            return entry.minValue;
+            return minValue;
           }
         };
       } else {
@@ -589,10 +590,11 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
               entry.denseRankPower,
               entry.numValues);
       if (entry.bitsPerValue == 0) {
+        final long minValue = entry.minValue;
         return new SparseNumericDocValues(disi) {
           @Override
           public long longValue() throws IOException {
-            return entry.minValue;
+            return minValue;
           }
         };
       } else {
