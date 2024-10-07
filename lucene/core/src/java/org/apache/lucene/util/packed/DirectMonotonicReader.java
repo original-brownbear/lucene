@@ -152,6 +152,44 @@ public final class DirectMonotonicReader extends LongValues {
     }
   }
 
+  public LongValues asPlainLongValues() {
+    if (mins.length == 1) {
+      long min = mins[0];
+      var reader = readers[0];
+      float avg = avgs[0];
+      if (bpvs[0] == 0) {
+        return new LongValues() {
+          @Override
+          public long get(long index) {
+            return (long) (index * avg) + min;
+          }
+        };
+      } else {
+        return new LongValues() {
+          @Override
+          public long get(long index) {
+            return reader.get(index) + (long) (index * avg) + min;
+          }
+        };
+      }
+    }
+    boolean allValuesZero = true;
+    for (byte bpv : bpvs) {
+      allValuesZero = allValuesZero && bpv == 0;
+    }
+    if (allValuesZero) {
+      return new LongValues() {
+        @Override
+        public long get(long index) {
+          final int block = (int) (index >>> blockShift);
+          final long blockIndex = index & blockMask;
+          return mins[block] + (long) (avgs[block] * blockIndex);
+        }
+      };
+    }
+    return this;
+  }
+
   /**
    * Return the index of a key if it exists, or its insertion point otherwise like {@link
    * Arrays#binarySearch(long[], int, int, long)}.

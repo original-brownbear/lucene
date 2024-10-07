@@ -449,12 +449,12 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     }
 
     @Override
-    public int nextDoc() throws IOException {
+    public int nextDoc() {
       return advance(doc + 1);
     }
 
     @Override
-    public int advance(int target) throws IOException {
+    public int advance(int target) {
       if (target >= maxDoc) {
         return doc = NO_MORE_DOCS;
       }
@@ -525,7 +525,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       if (entry.bitsPerValue == 0) {
         return new DenseNumericDocValues(maxDoc) {
           @Override
-          public long longValue() throws IOException {
+          public long longValue() {
             return entry.minValue;
           }
         };
@@ -554,7 +554,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             final long[] table = entry.table;
             return new DenseNumericDocValues(maxDoc) {
               @Override
-              public long longValue() throws IOException {
+              public long longValue() {
                 return table[(int) values.get(doc)];
               }
             };
@@ -562,7 +562,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             // Common case for ordinals, which are encoded as numerics
             return new DenseNumericDocValues(maxDoc) {
               @Override
-              public long longValue() throws IOException {
+              public long longValue() {
                 return values.get(doc);
               }
             };
@@ -571,7 +571,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             final long delta = entry.minValue;
             return new DenseNumericDocValues(maxDoc) {
               @Override
-              public long longValue() throws IOException {
+              public long longValue() {
                 return mul * values.get(doc) + delta;
               }
             };
@@ -591,7 +591,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       if (entry.bitsPerValue == 0) {
         return new SparseNumericDocValues(disi) {
           @Override
-          public long longValue() throws IOException {
+          public long longValue() {
             return entry.minValue;
           }
         };
@@ -621,14 +621,14 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             final long[] table = entry.table;
             return new SparseNumericDocValues(disi) {
               @Override
-              public long longValue() throws IOException {
+              public long longValue() {
                 return table[(int) values.get(disi.index())];
               }
             };
           } else if (entry.gcd == 1 && entry.minValue == 0) {
             return new SparseNumericDocValues(disi) {
               @Override
-              public long longValue() throws IOException {
+              public long longValue() {
                 return values.get(disi.index());
               }
             };
@@ -637,7 +637,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             final long delta = entry.minValue;
             return new SparseNumericDocValues(disi) {
               @Override
-              public long longValue() throws IOException {
+              public long longValue() {
                 return mul * values.get(disi.index()) + delta;
               }
             };
@@ -721,7 +721,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     }
 
     @Override
-    public int nextDoc() throws IOException {
+    public int nextDoc() {
       return advance(doc + 1);
     }
 
@@ -736,7 +736,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     }
 
     @Override
-    public int advance(int target) throws IOException {
+    public int advance(int target) {
       if (target >= maxDoc) {
         return doc = NO_MORE_DOCS;
       }
@@ -744,7 +744,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     }
 
     @Override
-    public boolean advanceExact(int target) throws IOException {
+    public boolean advanceExact(int target) {
       doc = target;
       return true;
     }
@@ -824,7 +824,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           addressesData.prefetch(0, 1);
         }
         final LongValues addresses =
-            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData, merging);
+            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData, merging)
+                .asPlainLongValues();
         return new DenseBinaryDocValues(maxDoc) {
           final BytesRef bytes = new BytesRef(new byte[entry.maxLength], 0, entry.maxLength);
 
@@ -871,7 +872,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           addressesData.prefetch(0, 1);
         }
         final LongValues addresses =
-            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData);
+            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData)
+                .asPlainLongValues();
         return new SparseBinaryDocValues(disi) {
           final BytesRef bytes = new BytesRef(new byte[entry.maxLength], 0, entry.maxLength);
 
@@ -922,12 +924,12 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           private int doc = -1;
 
           @Override
-          public int ordValue() throws IOException {
+          public int ordValue() {
             return (int) values.get(doc);
           }
 
           @Override
-          public boolean advanceExact(int target) throws IOException {
+          public boolean advanceExact(int target) {
             doc = target;
             return true;
           }
@@ -938,12 +940,12 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           }
 
           @Override
-          public int nextDoc() throws IOException {
+          public int nextDoc() {
             return advance(doc + 1);
           }
 
           @Override
-          public int advance(int target) throws IOException {
+          public int advance(int target) {
             if (target >= maxDoc) {
               return doc = NO_MORE_DOCS;
             }
@@ -968,7 +970,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         return new BaseSortedDocValues(entry) {
 
           @Override
-          public int ordValue() throws IOException {
+          public int ordValue() {
             return (int) values.get(disi.index());
           }
 
@@ -1139,14 +1141,16 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       RandomAccessInput addressesSlice =
           data.randomAccessSlice(entry.termsAddressesOffset, entry.termsAddressesLength);
       blockAddresses =
-          DirectMonotonicReader.getInstance(entry.termsAddressesMeta, addressesSlice, merging);
+          DirectMonotonicReader.getInstance(entry.termsAddressesMeta, addressesSlice, merging)
+              .asPlainLongValues();
       bytes = data.slice("terms", entry.termsDataOffset, entry.termsDataLength);
       blockMask = (1L << TERMS_DICT_BLOCK_LZ4_SHIFT) - 1;
       RandomAccessInput indexAddressesSlice =
           data.randomAccessSlice(entry.termsIndexAddressesOffset, entry.termsIndexAddressesLength);
       indexAddresses =
           DirectMonotonicReader.getInstance(
-              entry.termsIndexAddressesMeta, indexAddressesSlice, merging);
+                  entry.termsIndexAddressesMeta, indexAddressesSlice, merging)
+              .asPlainLongValues();
       indexBytes = data.slice("terms-index", entry.termsIndexOffset, entry.termsIndexLength);
       term = new BytesRef(entry.maxTermLength);
 
@@ -1336,32 +1340,32 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
     }
 
     @Override
-    public BytesRef term() throws IOException {
+    public BytesRef term() {
       return term;
     }
 
     @Override
-    public long ord() throws IOException {
+    public long ord() {
       return ord;
     }
 
     @Override
-    public long totalTermFreq() throws IOException {
+    public long totalTermFreq() {
       return -1L;
     }
 
     @Override
-    public PostingsEnum postings(PostingsEnum reuse, int flags) throws IOException {
+    public PostingsEnum postings(PostingsEnum reuse, int flags) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public ImpactsEnum impacts(int flags) throws IOException {
+    public ImpactsEnum impacts(int flags) {
       throw new UnsupportedOperationException();
     }
 
     @Override
-    public int docFreq() throws IOException {
+    public int docFreq() {
       throw new UnsupportedOperationException();
     }
   }
@@ -1385,7 +1389,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       addressesInput.prefetch(0, 1);
     }
     final LongValues addresses =
-        DirectMonotonicReader.getInstance(entry.addressesMeta, addressesInput, merging);
+        DirectMonotonicReader.getInstance(entry.addressesMeta, addressesInput, merging)
+            .asPlainLongValues();
 
     final LongValues values = getNumericValues(entry);
 
@@ -1398,7 +1403,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         int count;
 
         @Override
-        public int nextDoc() throws IOException {
+        public int nextDoc() {
           return advance(doc + 1);
         }
 
@@ -1413,7 +1418,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         }
 
         @Override
-        public int advance(int target) throws IOException {
+        public int advance(int target) {
           if (target >= maxDoc) {
             return doc = NO_MORE_DOCS;
           }
@@ -1424,7 +1429,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         }
 
         @Override
-        public boolean advanceExact(int target) throws IOException {
+        public boolean advanceExact(int target) {
           start = addresses.get(target);
           end = addresses.get(target + 1L);
           count = (int) (end - start);
@@ -1433,7 +1438,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         }
 
         @Override
-        public long nextValue() throws IOException {
+        public long nextValue() {
           return values.get(start++);
         }
 
@@ -1487,7 +1492,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         }
 
         @Override
-        public long nextValue() throws IOException {
+        public long nextValue() {
           set();
           return values.get(start++);
         }
@@ -1533,7 +1538,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         addressesInput.prefetch(0, 1);
       }
       final LongValues addresses =
-          DirectMonotonicReader.getInstance(ordsEntry.addressesMeta, addressesInput);
+          DirectMonotonicReader.getInstance(ordsEntry.addressesMeta, addressesInput)
+              .asPlainLongValues();
 
       final RandomAccessInput slice =
           data.randomAccessSlice(ordsEntry.valuesOffset, ordsEntry.valuesLength);
@@ -1553,12 +1559,12 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           private int count;
 
           @Override
-          public long nextOrd() throws IOException {
+          public long nextOrd() {
             return values.get(curr++);
           }
 
           @Override
-          public boolean advanceExact(int target) throws IOException {
+          public boolean advanceExact(int target) {
             curr = addresses.get(target);
             long end = addresses.get(target + 1L);
             count = (int) (end - curr);
@@ -1577,18 +1583,19 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           }
 
           @Override
-          public int nextDoc() throws IOException {
+          public int nextDoc() {
             return advance(doc + 1);
           }
 
           @Override
-          public int advance(int target) throws IOException {
+          public int advance(int target) {
             if (target >= maxDoc) {
               return doc = NO_MORE_DOCS;
             }
-            curr = addresses.get(target);
+            long curr = addresses.get(target);
             long end = addresses.get(target + 1L);
             count = (int) (end - curr);
+            this.curr = curr;
             return doc = target;
           }
 
@@ -1614,7 +1621,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           int count;
 
           @Override
-          public long nextOrd() throws IOException {
+          public long nextOrd() {
             set();
             return values.get(curr++);
           }
