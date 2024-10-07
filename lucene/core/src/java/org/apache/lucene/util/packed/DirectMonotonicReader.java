@@ -178,12 +178,7 @@ public final class DirectMonotonicReader extends LongValues {
           };
         }
         if (avg == 0) {
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return min;
-            }
-          };
+          return LongValues.constant(min);
         } else if (avg == 1) {
           return LongValues.IDENTITY;
         }

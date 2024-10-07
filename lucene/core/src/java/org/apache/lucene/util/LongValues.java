@@ -42,6 +42,15 @@ public abstract class LongValues {
         }
       };
 
+  public static LongValues constant(long value) {
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return value;
+      }
+    };
+  }
+
   /** Get value at <code>index</code>. */
   public abstract long get(long index);
 }

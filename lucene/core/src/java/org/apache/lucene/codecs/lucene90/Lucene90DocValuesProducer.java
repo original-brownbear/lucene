@@ -649,12 +649,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
   private LongValues getNumericValues(NumericEntry entry) throws IOException {
     if (entry.bitsPerValue == 0) {
-      return new LongValues() {
-        @Override
-        public long get(long index) {
-          return entry.minValue;
-        }
-      };
+      return LongValues.constant(entry.minValue);
     } else {
       final RandomAccessInput slice =
           data.randomAccessSlice(entry.valuesOffset, entry.valuesLength);
