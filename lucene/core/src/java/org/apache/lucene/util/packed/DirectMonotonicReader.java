@@ -152,12 +152,41 @@ public final class DirectMonotonicReader extends LongValues {
     }
   }
 
+  /**
+   * Try to extract a more efficient {@link LongValues} from this instance that does not have the
+   * mechanics for {@link #getBounds} and {@link #binarySearch} but allows for faster plain reading
+   * instead.
+   *
+   * @return either an optimized version of {@link LongValues} or if none could be found this
+   *     instance
+   */
   public LongValues asPlainLongValues() {
     if (mins.length == 1) {
       long min = mins[0];
       var reader = readers[0];
       float avg = avgs[0];
       if (bpvs[0] == 0) {
+        if (min == 0 && avg == 0) {
+          return LongValues.ZEROES;
+        }
+        if (min == 0) {
+          return new LongValues() {
+            @Override
+            public long get(long index) {
+              return (long) (avg * index);
+            }
+          };
+        }
+        if (avg == 0) {
+          return new LongValues() {
+            @Override
+            public long get(long index) {
+              return min;
+            }
+          };
+        } else if (avg == 1) {
+          return LongValues.IDENTITY;
+        }
         return new LongValues() {
           @Override
           public long get(long index) {
