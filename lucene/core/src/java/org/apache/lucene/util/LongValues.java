@@ -40,17 +40,71 @@ public abstract class LongValues {
         public long get(long index) {
           return 0;
         }
+
+        @Override
+        public LongValues add(long shift) {
+          return shift == 0 ? ZEROES : constant(shift);
+        }
       };
 
+  public static LongValues linear(float slope, long intercept) {
+    if (slope == 0) {
+      return constant(intercept);
+    }
+    if (slope == 1 && intercept == 0) {
+      return IDENTITY;
+    }
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return (long) (slope * index) + intercept;
+      }
+
+      @Override
+      public LongValues add(long shift) {
+        return linear(slope, shift + intercept);
+      }
+    };
+  }
+
   public static LongValues constant(long value) {
+    if (value == 0) {
+      return ZEROES;
+    }
     return new LongValues() {
       @Override
       public long get(long index) {
         return value;
+      }
+
+      @Override
+      public LongValues add(long shift) {
+        return constant(shift + value);
       }
     };
   }
 
   /** Get value at <code>index</code>. */
   public abstract long get(long index);
+
+  public LongValues add(long shift) {
+    return shifted(this, shift);
+  }
+
+  private static LongValues shifted(LongValues values, long added) {
+    if (added == 0) {
+      return values;
+    }
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return values.get(index) + added;
+      }
+
+      @Override
+      public LongValues add(long shift) {
+        return shifted(values, added + shift);
+      }
+    };
+  }
 }

@@ -691,17 +691,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
               return values.get(index) * gcd + minValue;
             }
           };
-        } else if (entry.minValue != 0) {
-          final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) + minValue;
-            }
-          };
-        } else {
-          return values;
         }
+        return values.add(entry.minValue);
       }
     }
   }
