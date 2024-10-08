@@ -111,16 +111,15 @@ public final class DirectMonotonicReader extends LongValues {
 
   private final int blockShift;
   private final long blockMask;
-  private final LongValues[] readers;
   private final long[] mins;
   private final float[] avgs;
   private final byte[] bpvs;
+  private final LongValues optimized;
 
   private DirectMonotonicReader(
       int blockShift, LongValues[] readers, long[] mins, float[] avgs, byte[] bpvs) {
     this.blockShift = blockShift;
     this.blockMask = (1L << blockShift) - 1;
-    this.readers = readers;
     this.mins = mins;
     this.avgs = avgs;
     this.bpvs = bpvs;
@@ -129,14 +128,43 @@ public final class DirectMonotonicReader extends LongValues {
         || readers.length != bpvs.length) {
       throw new IllegalArgumentException();
     }
+    this.optimized = buildOptimized(mins, readers, avgs, bpvs, blockShift, blockMask);
+  }
+
+  private static LongValues buildOptimized(
+      long[] mins,
+      LongValues[] readers,
+      float[] avgs,
+      byte[] bpvs,
+      int blockShift,
+      long blockMask) {
+    if (mins.length == 1) {
+      long min = mins[0];
+      var reader = readers[0];
+      float avg = avgs[0];
+      if (bpvs[0] == 0) {
+        return LongValues.linear(avg, min);
+      } else {
+        return reader.addLinear(avg, min);
+      }
+    }
+    boolean allValuesZero = true;
+    for (byte bpv : bpvs) {
+      allValuesZero = allValuesZero && bpv == 0;
+    }
+    LongValues[] smallerReaders = new LongValues[mins.length];
+    for (int i = 0; i < mins.length; i++) {
+      long min = mins[i];
+      var reader = readers[i];
+      float avg = avgs[i];
+      smallerReaders[i] = bpvs[i] == 0 ? LongValues.linear(avg, min) : reader.addLinear(avg, min);
+    }
+    return combine(smallerReaders, blockMask, blockShift);
   }
 
   @Override
   public long get(long index) {
-    final int block = (int) (index >>> blockShift);
-    final long blockIndex = index & blockMask;
-    final long delta = readers[block].get(blockIndex);
-    return mins[block] + (long) (avgs[block] * blockIndex) + delta;
+    return optimized.get(index);
   }
 
   /** Get lower/upper bounds for the value at a given index without hitting the direct reader. */
@@ -161,31 +189,60 @@ public final class DirectMonotonicReader extends LongValues {
    *     instance
    */
   public LongValues asPlainLongValues() {
-    if (mins.length == 1) {
-      long min = mins[0];
-      var reader = readers[0];
-      float avg = avgs[0];
-      if (bpvs[0] == 0) {
-        return LongValues.linear(avg, min);
-      } else {
-        return reader.addLinear(avg, min);
+    return optimized;
+  }
+
+  private static LongValues combine(LongValues[] readers, long blockMask, int blockShift) {
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        final int block = (int) (index >>> blockShift);
+        final long blockIndex = index & blockMask;
+        return readers[block].get(blockIndex);
       }
-    }
-    boolean allValuesZero = true;
-    for (byte bpv : bpvs) {
-      allValuesZero = allValuesZero && bpv == 0;
-    }
-    if (allValuesZero) {
-      return new LongValues() {
-        @Override
-        public long get(long index) {
-          final int block = (int) (index >>> blockShift);
-          final long blockIndex = index & blockMask;
-          return mins[block] + (long) (avgs[block] * blockIndex);
+
+      @Override
+      public LongValues add(long shift) {
+        if (shift == 0) {
+          return this;
         }
-      };
-    }
-    return this;
+        final LongValues[] added = new LongValues[readers.length];
+        for (int i = 0; i < readers.length; i++) {
+          added[i] = readers[i].add(shift);
+        }
+        return combine(added, blockMask, blockShift);
+      }
+
+      @Override
+      public LongValues stretchByLong(long factor) {
+        if (factor == 0) {
+          return LongValues.ZEROES;
+        }
+        if (factor == 1) {
+          return this;
+        }
+        final LongValues[] multiplied = new LongValues[readers.length];
+        for (int i = 0; i < readers.length; i++) {
+          multiplied[i] = readers[i].stretchByLong(factor);
+        }
+        return combine(multiplied, blockMask, blockShift);
+      }
+
+      @Override
+      public LongValues stretchByFloat(float factor) {
+        if (factor == 0) {
+          return LongValues.ZEROES;
+        }
+        if (factor == 1) {
+          return this;
+        }
+        final LongValues[] multiplied = new LongValues[readers.length];
+        for (int i = 0; i < readers.length; i++) {
+          multiplied[i] = readers[i].stretchByFloat(factor);
+        }
+        return combine(multiplied, blockMask, blockShift);
+      }
+    };
   }
 
   /**
