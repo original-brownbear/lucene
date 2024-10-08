@@ -166,25 +166,9 @@ public final class DirectMonotonicReader extends LongValues {
       var reader = readers[0];
       float avg = avgs[0];
       if (bpvs[0] == 0) {
-        if (min == 0 && avg == 0) {
-          return LongValues.ZEROES;
-        }
-        if (min == 0) {
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return (long) (avg * index);
-            }
-          };
-        }
         return LongValues.linear(avg, min);
       } else {
-        return new LongValues() {
-          @Override
-          public long get(long index) {
-            return reader.get(index) + (long) (index * avg) + min;
-          }
-        };
+        return reader.addLinear(avg, min);
       }
     }
     boolean allValuesZero = true;

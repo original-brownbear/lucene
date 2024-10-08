@@ -682,17 +682,8 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
               return table[(int) values.get(index)];
             }
           };
-        } else if (entry.gcd != 1) {
-          final long gcd = entry.gcd;
-          final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) * gcd + minValue;
-            }
-          };
         }
-        return values.add(entry.minValue);
+        return values.transformLinear(entry.gcd, entry.minValue);
       }
     }
   }

@@ -27,8 +27,8 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.search.VectorScorer;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.hnsw.RandomVectorScorer;
-import org.apache.lucene.util.packed.DirectMonotonicReader;
 import org.apache.lucene.util.quantization.QuantizedByteVectorValues;
 import org.apache.lucene.util.quantization.ScalarQuantizer;
 
@@ -260,7 +260,7 @@ public abstract class OffHeapQuantizedByteVectorValues extends QuantizedByteVect
   }
 
   private static class SparseOffHeapVectorValues extends OffHeapQuantizedByteVectorValues {
-    private final DirectMonotonicReader ordToDoc;
+    private final LongValues ordToDoc;
     private final IndexedDISI disi;
     // dataIn was used to init a new IndexedDIS for #randomAccess()
     private final IndexInput dataIn;

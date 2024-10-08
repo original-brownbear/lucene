@@ -1446,7 +1446,11 @@ public abstract class LegacyBaseDocValuesFormatTestCase extends BaseIndexFileFor
           }
           assertEquals(storedValues.length, docValues.docValueCount());
           for (int v = 0; v < docValues.docValueCount(); v++) {
-            assertEquals(storedValues[v], Long.toString(docValues.nextValue()));
+            try {
+              assertEquals(storedValues[v], Long.toString(docValues.nextValue()));
+            } catch (AssertionError e) {
+              throw new AssertionError(e);
+            }
           }
         }
       }

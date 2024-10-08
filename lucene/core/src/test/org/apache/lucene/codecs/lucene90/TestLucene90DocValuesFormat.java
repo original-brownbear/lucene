@@ -266,7 +266,11 @@ public class TestLucene90DocValuesFormat extends BaseCompressingDocValuesFormatT
           assertEquals(i, sortedNumeric.nextDoc());
           assertEquals(valuesFields.length, sortedNumeric.docValueCount());
           for (int j = 0; j < sortedNumeric.docValueCount(); ++j) {
-            assertTrue(valueSet.contains(sortedNumeric.nextValue()));
+            try {
+              assertTrue(valueSet.contains(sortedNumeric.nextValue()));
+            } catch (AssertionError e) {
+              throw new AssertionError(e);
+            }
           }
           assertEquals(i, sortedSet.nextDoc());
 

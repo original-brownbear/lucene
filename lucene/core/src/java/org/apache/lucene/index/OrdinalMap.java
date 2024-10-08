@@ -381,13 +381,7 @@ public class OrdinalMap implements Accountable {
               };
           ramBytesUsed += newDeltas.ramBytesUsed();
         } else {
-          segmentToGlobalOrds[i] =
-              new LongValues() {
-                @Override
-                public long get(long ord) {
-                  return ord + deltas.get(ord);
-                }
-              };
+          segmentToGlobalOrds[i] = deltas.addLinear(1, 0);
           ramBytesUsed += deltas.ramBytesUsed();
         }
         ramBytesUsed += RamUsageEstimator.shallowSizeOf(segmentToGlobalOrds[i]);

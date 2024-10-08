@@ -29,6 +29,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
 import org.apache.lucene.store.ReadAdvice;
+import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.packed.DirectMonotonicReader;
 
 final class FieldsIndexReader extends FieldsIndex {
@@ -43,7 +44,8 @@ final class FieldsIndexReader extends FieldsIndex {
       docsEndPointer,
       startPointersStartPointer,
       startPointersEndPointer;
-  private final DirectMonotonicReader docs, startPointers;
+  private final DirectMonotonicReader docs;
+  private final LongValues startPointers;
   private final long maxPointer;
 
   FieldsIndexReader(
@@ -87,7 +89,9 @@ final class FieldsIndexReader extends FieldsIndex {
         indexInput.randomAccessSlice(
             startPointersStartPointer, startPointersEndPointer - startPointersStartPointer);
     docs = DirectMonotonicReader.getInstance(docsMeta, docsSlice);
-    startPointers = DirectMonotonicReader.getInstance(startPointersMeta, startPointersSlice);
+    startPointers =
+        DirectMonotonicReader.getInstance(startPointersMeta, startPointersSlice)
+            .asPlainLongValues();
   }
 
   private FieldsIndexReader(FieldsIndexReader other) throws IOException {
@@ -108,7 +112,9 @@ final class FieldsIndexReader extends FieldsIndex {
         indexInput.randomAccessSlice(
             startPointersStartPointer, startPointersEndPointer - startPointersStartPointer);
     docs = DirectMonotonicReader.getInstance(docsMeta, docsSlice);
-    startPointers = DirectMonotonicReader.getInstance(startPointersMeta, startPointersSlice);
+    startPointers =
+        DirectMonotonicReader.getInstance(startPointersMeta, startPointersSlice)
+            .asPlainLongValues();
   }
 
   @Override
