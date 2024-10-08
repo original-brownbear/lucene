@@ -219,6 +219,11 @@ public final class DirectMonotonicReader extends LongValues {
         }
       };
     }
+    return withLinearShift(blockShift, blockMask, readers, mins, avgs);
+  }
+
+  private static LongValues withLinearShift(
+      int blockShift, long blockMask, LongValues[] readers, long[] mins, float[] avgs) {
     return new LongValues() {
       @Override
       public long get(long index) {
@@ -226,6 +231,19 @@ public final class DirectMonotonicReader extends LongValues {
         final long blockIndex = index & blockMask;
         final long delta = readers[block].get(blockIndex);
         return mins[block] + (long) (avgs[block] * blockIndex) + delta;
+      }
+
+      @Override
+      protected LongValues doLinearTransform(long factor, long yShift) {
+        long[] newMins = new long[mins.length];
+        float[] newAvg = new float[mins.length];
+        LongValues[] newReaders = new LongValues[mins.length];
+        for (int i = 0; i < mins.length; i++) {
+          newMins[i] = mins[i] * factor + yShift;
+          newAvg[i] = avgs[i] * factor;
+          newReaders[i] = readers[i].linearTransform(factor, 0);
+        }
+        return withLinearShift(blockShift, blockMask, newReaders, newMins, newAvg);
       }
     };
   }
