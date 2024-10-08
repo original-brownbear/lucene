@@ -236,7 +236,7 @@ public final class DirectMonotonicReader extends LongValues {
   }
 
   @Override
-  public LongValues linearTransform(long factor, long yShift) {
+  public LongValues doLinearTransform(long factor, long yShift) {
     return reader.linearTransform(factor, yShift);
   }
 

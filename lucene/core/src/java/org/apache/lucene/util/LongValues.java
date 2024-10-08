@@ -33,7 +33,7 @@ public abstract class LongValues {
         }
 
         @Override
-        public LongValues linearTransform(long factor, long yShift) {
+        public LongValues doLinearTransform(long factor, long yShift) {
           return linear(factor, yShift);
         }
       };
@@ -47,7 +47,7 @@ public abstract class LongValues {
         }
 
         @Override
-        public LongValues linearTransform(long factor, long yShift) {
+        public LongValues doLinearTransform(long factor, long yShift) {
           return constant(yShift);
         }
       };
@@ -63,7 +63,7 @@ public abstract class LongValues {
       }
 
       @Override
-      public LongValues linearTransform(long factor, long yShift) {
+      public LongValues doLinearTransform(long factor, long yShift) {
         return constant(factor * value + yShift);
       }
     };
@@ -81,7 +81,7 @@ public abstract class LongValues {
       }
 
       @Override
-      public LongValues linearTransform(long factor, long yShift) {
+      public LongValues doLinearTransform(long factor, long yShift) {
         return linear(factor * slope, yShift);
       }
     };
@@ -102,7 +102,7 @@ public abstract class LongValues {
       }
 
       @Override
-      public LongValues linearTransform(long factor, long yShift) {
+      public LongValues doLinearTransform(long factor, long yShift) {
         return linear(factor * slope, factor * intersect + yShift);
       }
     };
@@ -131,7 +131,17 @@ public abstract class LongValues {
     return linearTransform(1, value);
   }
 
-  public LongValues linearTransform(long factor, long yShift) {
+  public final LongValues linearTransform(long factor, long yShift) {
+    if (factor == 0) {
+      return constant(yShift);
+    }
+    if (factor == 1L && yShift == 0) {
+      return this;
+    }
+    return doLinearTransform(factor, yShift);
+  }
+
+  protected LongValues doLinearTransform(long factor, long yShift) {
     return linearTransform(this, factor, yShift);
   }
 
@@ -144,7 +154,7 @@ public abstract class LongValues {
       }
 
       @Override
-      public LongValues linearTransform(long f, long s) {
+      public LongValues doLinearTransform(long f, long s) {
         return values.linearTransform(factor * f, f * yShift + s);
       }
     };

@@ -691,7 +691,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       }
 
       @Override
-      public LongValues linearTransform(long factor, long yShift) {
+      public LongValues doLinearTransform(long factor, long yShift) {
         return linearTransformedVBPVReader(vBPVReader, factor, yShift);
       }
     };
@@ -711,7 +711,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       }
 
       @Override
-      public LongValues linearTransform(long f, long s) {
+      public LongValues doLinearTransform(long f, long s) {
         return linearTransformedVBPVReader(vBPVReader, f * factor, yShift * f + s);
       }
     };
@@ -725,13 +725,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       }
 
       @Override
-      public LongValues linearTransform(long factor, long yShift) {
-        if (factor == 0) {
-          return LongValues.constant(yShift);
-        }
-        if (factor == 1 && yShift == 0) {
-          return this;
-        }
+      public LongValues doLinearTransform(long factor, long yShift) {
         var newTable = table.clone();
         for (int i = 0; i < table.length; i++) {
           newTable[i] = table[i] * factor + yShift;
