@@ -153,12 +153,27 @@ public final class DirectMonotonicReader extends LongValues {
       allValuesZero = allValuesZero && bpv == 0;
     }
     LongValues[] smallerReaders = new LongValues[mins.length];
+    boolean allZero = true;
+    float firstAvg = avgs[0];
+    boolean allAvgsEqual = true;
     for (int i = 0; i < mins.length; i++) {
       long min = mins[i];
       var reader = readers[i];
       float avg = avgs[i];
+      allAvgsEqual = allAvgsEqual && avg == firstAvg;
+      allZero = allZero && bpvs[i] == 0;
       smallerReaders[i] = bpvs[i] == 0 ? LongValues.linear(avg, min) : reader.addLinear(avg, min);
     }
+    if (allZero && allAvgsEqual) {
+      boolean minsEqualSpaced = true;
+      for (int i = 1; i < mins.length - 1; i++) {
+        minsEqualSpaced = minsEqualSpaced && mins[i] - mins[i - 1] == mins[i + 1] - mins[i];
+      }
+      if (minsEqualSpaced) {
+        return LongValues.linear(avgs[0], mins[0]);
+      }
+    }
+
     return combine(smallerReaders, blockMask, blockShift);
   }
 
@@ -241,6 +256,24 @@ public final class DirectMonotonicReader extends LongValues {
           multiplied[i] = readers[i].stretchByFloat(factor);
         }
         return combine(multiplied, blockMask, blockShift);
+      }
+
+      @Override
+      public LongValues addLinear(float slope, long intercept) {
+        final LongValues[] withLinear = new LongValues[readers.length];
+        for (int i = 0; i < readers.length; i++) {
+          withLinear[i] = readers[i].addLinear(slope, intercept);
+        }
+        return combine(withLinear, blockMask, blockShift);
+      }
+
+      @Override
+      public LongValues transformLinear(long factor, long shift) {
+        final LongValues[] withLinear = new LongValues[readers.length];
+        for (int i = 0; i < readers.length; i++) {
+          withLinear[i] = readers[i].transformLinear(factor, shift);
+        }
+        return combine(withLinear, blockMask, blockShift);
       }
     };
   }
