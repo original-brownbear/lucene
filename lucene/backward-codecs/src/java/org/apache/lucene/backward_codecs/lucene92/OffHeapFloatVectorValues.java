@@ -26,6 +26,7 @@ import org.apache.lucene.search.VectorScorer;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.RandomAccessInput;
 import org.apache.lucene.util.Bits;
+import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.packed.DirectMonotonicReader;
 
 /** Read the vector values from the index input. This supports both iterated and random access. */
@@ -136,7 +137,7 @@ abstract class OffHeapFloatVectorValues extends FloatVectorValues {
   }
 
   private static class SparseOffHeapVectorValues extends OffHeapFloatVectorValues {
-    private final DirectMonotonicReader ordToDoc;
+    private final LongValues ordToDoc;
     private final IndexedDISI disi;
     // dataIn was used to init a new IndexedDIS for #randomAccess()
     private final IndexInput dataIn;
@@ -154,7 +155,7 @@ abstract class OffHeapFloatVectorValues extends FloatVectorValues {
       final RandomAccessInput addressesData =
           dataIn.randomAccessSlice(fieldEntry.addressesOffset(), fieldEntry.addressesLength());
       this.dataIn = dataIn;
-      this.ordToDoc = DirectMonotonicReader.getInstance(fieldEntry.meta(), addressesData);
+      this.ordToDoc = DirectMonotonicReader.getInstance(fieldEntry.meta(), addressesData).unwrap();
       this.disi =
           new IndexedDISI(
               dataIn,

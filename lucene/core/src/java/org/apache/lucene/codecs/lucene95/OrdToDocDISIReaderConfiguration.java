@@ -24,6 +24,7 @@ import org.apache.lucene.search.DocIdSetIterator;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.RandomAccessInput;
+import org.apache.lucene.util.LongValues;
 import org.apache.lucene.util.packed.DirectMonotonicReader;
 import org.apache.lucene.util.packed.DirectMonotonicWriter;
 
@@ -204,11 +205,11 @@ public class OrdToDocDISIReaderConfiguration {
    * @return the DirectMonotonicReader for sparse values
    * @throws IOException thrown when reading data fails
    */
-  public DirectMonotonicReader getDirectMonotonicReader(IndexInput dataIn) throws IOException {
+  public LongValues getDirectMonotonicReader(IndexInput dataIn) throws IOException {
     assert docsWithFieldOffset > -1;
     final RandomAccessInput addressesData =
         dataIn.randomAccessSlice(addressesOffset, addressesLength);
-    return DirectMonotonicReader.getInstance(meta, addressesData);
+    return DirectMonotonicReader.getInstance(meta, addressesData).unwrap();
   }
 
   /**

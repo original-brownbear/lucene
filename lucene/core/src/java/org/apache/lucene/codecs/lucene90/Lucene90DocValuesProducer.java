@@ -824,7 +824,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           addressesData.prefetch(0, 1);
         }
         final LongValues addresses =
-            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData, merging);
+            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData, merging).unwrap();
         return new DenseBinaryDocValues(maxDoc) {
           final BytesRef bytes = new BytesRef(new byte[entry.maxLength], 0, entry.maxLength);
 
@@ -871,7 +871,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
           addressesData.prefetch(0, 1);
         }
         final LongValues addresses =
-            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData);
+            DirectMonotonicReader.getInstance(entry.addressesMeta, addressesData).unwrap();
         return new SparseBinaryDocValues(disi) {
           final BytesRef bytes = new BytesRef(new byte[entry.maxLength], 0, entry.maxLength);
 
@@ -1139,14 +1139,16 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       RandomAccessInput addressesSlice =
           data.randomAccessSlice(entry.termsAddressesOffset, entry.termsAddressesLength);
       blockAddresses =
-          DirectMonotonicReader.getInstance(entry.termsAddressesMeta, addressesSlice, merging);
+          DirectMonotonicReader.getInstance(entry.termsAddressesMeta, addressesSlice, merging)
+              .unwrap();
       bytes = data.slice("terms", entry.termsDataOffset, entry.termsDataLength);
       blockMask = (1L << TERMS_DICT_BLOCK_LZ4_SHIFT) - 1;
       RandomAccessInput indexAddressesSlice =
           data.randomAccessSlice(entry.termsIndexAddressesOffset, entry.termsIndexAddressesLength);
       indexAddresses =
           DirectMonotonicReader.getInstance(
-              entry.termsIndexAddressesMeta, indexAddressesSlice, merging);
+                  entry.termsIndexAddressesMeta, indexAddressesSlice, merging)
+              .unwrap();
       indexBytes = data.slice("terms-index", entry.termsIndexOffset, entry.termsIndexLength);
       term = new BytesRef(entry.maxTermLength);
 
@@ -1385,7 +1387,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
       addressesInput.prefetch(0, 1);
     }
     final LongValues addresses =
-        DirectMonotonicReader.getInstance(entry.addressesMeta, addressesInput, merging);
+        DirectMonotonicReader.getInstance(entry.addressesMeta, addressesInput, merging).unwrap();
 
     final LongValues values = getNumericValues(entry);
 
@@ -1533,7 +1535,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         addressesInput.prefetch(0, 1);
       }
       final LongValues addresses =
-          DirectMonotonicReader.getInstance(ordsEntry.addressesMeta, addressesInput);
+          DirectMonotonicReader.getInstance(ordsEntry.addressesMeta, addressesInput).unwrap();
 
       final RandomAccessInput slice =
           data.randomAccessSlice(ordsEntry.valuesOffset, ordsEntry.valuesLength);

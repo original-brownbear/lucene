@@ -111,16 +111,16 @@ public final class DirectMonotonicReader extends LongValues {
 
   private final int blockShift;
   private final long blockMask;
-  private final LongValues[] readers;
   private final long[] mins;
   private final float[] avgs;
   private final byte[] bpvs;
+
+  private final LongValues reader;
 
   private DirectMonotonicReader(
       int blockShift, LongValues[] readers, long[] mins, float[] avgs, byte[] bpvs) {
     this.blockShift = blockShift;
     this.blockMask = (1L << blockShift) - 1;
-    this.readers = readers;
     this.mins = mins;
     this.avgs = avgs;
     this.bpvs = bpvs;
@@ -129,14 +129,94 @@ public final class DirectMonotonicReader extends LongValues {
         || readers.length != bpvs.length) {
       throw new IllegalArgumentException();
     }
+    this.reader = buildCombinedReader(blockShift, blockMask, readers, bpvs, mins, avgs);
+  }
+
+  private static LongValues buildCombinedReader(
+      int blockShift,
+      long blockMask,
+      LongValues[] readers,
+      byte[] bpvs,
+      long[] mins,
+      float[] avgs) {
+    if (mins.length == 1) {
+      long min = mins[0];
+      float avg = avgs[0];
+      if (bpvs[0] == 0) {
+        if (min == 0L) {
+          if (avg == 1) {
+            return LongValues.IDENTITY;
+          }
+          if (avg == 0) {
+            return LongValues.ZEROES;
+          }
+          return new LongValues() {
+            @Override
+            public long get(long index) {
+              return (long) (avg * index);
+            }
+          };
+        }
+        if (avg == 0) {
+          return new LongValues() {
+            @Override
+            public long get(long index) {
+              return min;
+            }
+          };
+        }
+        return new LongValues() {
+          @Override
+          public long get(long index) {
+            return min + (long) (avg * index);
+          }
+        };
+      }
+      LongValues r = readers[0];
+      if (min == 0) {
+        if (avg == 0) {
+          return r;
+        }
+        return new LongValues() {
+          @Override
+          public long get(long index) {
+            return (long) (avg * index) + r.get(index);
+          }
+        };
+      }
+      if (avg == 0) {
+        return new LongValues() {
+          @Override
+          public long get(long index) {
+            return r.get(index) + min;
+          }
+        };
+      }
+      return new LongValues() {
+        @Override
+        public long get(long index) {
+          return min + (long) (avg * index) + r.get(index);
+        }
+      };
+    }
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        final int block = (int) (index >>> blockShift);
+        final long blockIndex = index & blockMask;
+        final long delta = readers[block].get(blockIndex);
+        return mins[block] + (long) (avgs[block] * blockIndex) + delta;
+      }
+    };
   }
 
   @Override
   public long get(long index) {
-    final int block = (int) (index >>> blockShift);
-    final long blockIndex = index & blockMask;
-    final long delta = readers[block].get(blockIndex);
-    return mins[block] + (long) (avgs[block] * blockIndex) + delta;
+    return reader.get(index);
+  }
+
+  public LongValues unwrap() {
+    return reader;
   }
 
   /** Get lower/upper bounds for the value at a given index without hitting the direct reader. */
@@ -175,7 +255,7 @@ public final class DirectMonotonicReader extends LongValues {
       } else if (bounds[0] > key) {
         hi = mid - 1;
       } else {
-        final long midVal = get(mid);
+        final long midVal = reader.get(mid);
         if (midVal < key) {
           lo = mid + 1;
         } else if (midVal > key) {
