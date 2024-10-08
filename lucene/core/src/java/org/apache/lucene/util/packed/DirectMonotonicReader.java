@@ -199,6 +199,51 @@ public final class DirectMonotonicReader extends LongValues {
         }
       };
     }
+    boolean allValuesZero = true;
+    boolean allAveragesEqual = true;
+    boolean minsEqualSpaced = true;
+    for (int i = 0; i < bpvs.length; i++) {
+      byte bpv = bpvs[i];
+      if (bpv != 0) {
+        allValuesZero = false;
+        break;
+      }
+      if (allAveragesEqual && i > 0) {
+        allAveragesEqual = avgs[i] == avgs[i - 1];
+        if (minsEqualSpaced && i < mins.length - 1) {
+          minsEqualSpaced = mins[i] - mins[i - 1] == mins[i + 1] - mins[i];
+        }
+      }
+    }
+    if (allValuesZero) {
+      if (allAveragesEqual) {
+        float avg = avgs[0];
+        if (minsEqualSpaced && mins[0] == 0) {
+          return new LongValues() {
+            @Override
+            public long get(long index) {
+              return (long) (avg * index);
+            }
+          };
+        }
+        return new LongValues() {
+          @Override
+          public long get(long index) {
+            final int block = (int) (index >>> blockShift);
+            final long blockIndex = index & blockMask;
+            return mins[block] + (long) (avg * blockIndex);
+          }
+        };
+      }
+      return new LongValues() {
+        @Override
+        public long get(long index) {
+          final int block = (int) (index >>> blockShift);
+          final long blockIndex = index & blockMask;
+          return mins[block] + (long) (avgs[block] * blockIndex);
+        }
+      };
+    }
     return new LongValues() {
       @Override
       public long get(long index) {
