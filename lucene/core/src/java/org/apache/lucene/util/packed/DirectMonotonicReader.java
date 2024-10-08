@@ -150,27 +150,12 @@ public final class DirectMonotonicReader extends LongValues {
           if (avg == 0) {
             return LongValues.ZEROES;
           }
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return (long) (avg * index);
-            }
-          };
+          return linear(avg, 0);
         }
         if (avg == 0) {
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return min;
-            }
-          };
+          return LongValues.constant(min);
         }
-        return new LongValues() {
-          @Override
-          public long get(long index) {
-            return min + (long) (avg * index);
-          }
-        };
+        return linear(avg, min);
       }
       LongValues r = readers[0];
       if (min == 0) {
@@ -185,12 +170,7 @@ public final class DirectMonotonicReader extends LongValues {
         };
       }
       if (avg == 0) {
-        return new LongValues() {
-          @Override
-          public long get(long index) {
-            return r.get(index) + min;
-          }
-        };
+        return r.add(min);
       }
       return new LongValues() {
         @Override
@@ -219,12 +199,7 @@ public final class DirectMonotonicReader extends LongValues {
       if (allAveragesEqual) {
         float avg = avgs[0];
         if (minsEqualSpaced && mins[0] == 0) {
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return (long) (avg * index);
-            }
-          };
+          return LongValues.linear(avg, 0);
         }
         return new LongValues() {
           @Override
@@ -258,6 +233,11 @@ public final class DirectMonotonicReader extends LongValues {
   @Override
   public long get(long index) {
     return reader.get(index);
+  }
+
+  @Override
+  public LongValues linearTransform(long factor, long yShift) {
+    return reader.linearTransform(factor, yShift);
   }
 
   public LongValues unwrap() {

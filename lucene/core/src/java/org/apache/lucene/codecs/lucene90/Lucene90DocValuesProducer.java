@@ -649,12 +649,7 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
   private LongValues getNumericValues(NumericEntry entry) throws IOException {
     if (entry.bitsPerValue == 0) {
-      return new LongValues() {
-        @Override
-        public long get(long index) {
-          return entry.minValue;
-        }
-      };
+      return LongValues.constant(entry.minValue);
     } else {
       final RandomAccessInput slice =
           data.randomAccessSlice(entry.valuesOffset, entry.valuesLength);
@@ -664,51 +659,86 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
         slice.prefetch(0, 1);
       }
       if (entry.blockShift >= 0) {
-        return new LongValues() {
-          final VaryingBPVReader vBPVReader = new VaryingBPVReader(entry, slice);
-
-          @Override
-          public long get(long index) {
-            try {
-              return vBPVReader.getLongValue(index);
-            } catch (IOException e) {
-              throw new RuntimeException(e);
-            }
-          }
-        };
+        return wrapvBPVReader(entry, slice);
       } else {
         final LongValues values =
             getDirectReaderInstance(slice, entry.bitsPerValue, 0L, entry.numValues);
         if (entry.table != null) {
           final long[] table = entry.table;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return table[(int) values.get(index)];
-            }
-          };
+          return mapFromArray(table, values);
         } else if (entry.gcd != 1) {
           final long gcd = entry.gcd;
           final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) * gcd + minValue;
-            }
-          };
-        } else if (entry.minValue != 0) {
-          final long minValue = entry.minValue;
-          return new LongValues() {
-            @Override
-            public long get(long index) {
-              return values.get(index) + minValue;
-            }
-          };
-        } else {
-          return values;
+          return values.linearTransform(gcd, minValue);
         }
+        return values.add(entry.minValue);
       }
     }
+  }
+
+  private LongValues wrapvBPVReader(NumericEntry entry, RandomAccessInput slice)
+      throws IOException {
+    return new LongValues() {
+      final VaryingBPVReader vBPVReader = new VaryingBPVReader(entry, slice);
+
+      @Override
+      public long get(long index) {
+        try {
+          return vBPVReader.getLongValue(index);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+
+      @Override
+      public LongValues linearTransform(long factor, long yShift) {
+        return linearTransformedVBPVReader(vBPVReader, factor, yShift);
+      }
+    };
+  }
+
+  private LongValues linearTransformedVBPVReader(
+      VaryingBPVReader vBPVReader, long factor, long yShift) {
+    return new LongValues() {
+
+      @Override
+      public long get(long index) {
+        try {
+          return factor * vBPVReader.getLongValue(index) + yShift;
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+
+      @Override
+      public LongValues linearTransform(long f, long s) {
+        return linearTransformedVBPVReader(vBPVReader, f * factor, yShift * f + s);
+      }
+    };
+  }
+
+  private static LongValues mapFromArray(long[] table, LongValues values) {
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return table[(int) values.get(index)];
+      }
+
+      @Override
+      public LongValues linearTransform(long factor, long yShift) {
+        if (factor == 0) {
+          return LongValues.constant(yShift);
+        }
+        if (factor == 1 && yShift == 0) {
+          return this;
+        }
+        var newTable = table.clone();
+        for (int i = 0; i < table.length; i++) {
+          newTable[i] = table[i] * factor + yShift;
+        }
+        return mapFromArray(newTable, values);
+      }
+    };
   }
 
   private abstract static class DenseBinaryDocValues extends BinaryDocValues {

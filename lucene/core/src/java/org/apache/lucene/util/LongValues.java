@@ -31,6 +31,11 @@ public abstract class LongValues {
         public long get(long index) {
           return index;
         }
+
+        @Override
+        public LongValues linearTransform(long factor, long yShift) {
+          return linear(factor, yShift);
+        }
       };
 
   public static final LongValues ZEROES =
@@ -40,8 +45,108 @@ public abstract class LongValues {
         public long get(long index) {
           return 0;
         }
+
+        @Override
+        public LongValues linearTransform(long factor, long yShift) {
+          return constant(yShift);
+        }
       };
+
+  public static LongValues constant(long value) {
+    if (value == 0) {
+      return ZEROES;
+    }
+    return new LongValues() {
+      @Override
+      public long get(long index) {
+        return value;
+      }
+
+      @Override
+      public LongValues linearTransform(long factor, long yShift) {
+        return constant(factor * value + yShift);
+      }
+    };
+  }
+
+  public static LongValues linear(long slope) {
+    if (slope == 1) {
+      return IDENTITY;
+    }
+    return new LongValues() {
+
+      @Override
+      public long get(long index) {
+        return slope * index;
+      }
+
+      @Override
+      public LongValues linearTransform(long factor, long yShift) {
+        return linear(factor * slope, yShift);
+      }
+    };
+  }
+
+  public static LongValues linear(long slope, long intersect) {
+    if (slope == 0L) {
+      return constant(intersect);
+    }
+    if (intersect == 0) {
+      return linear(slope);
+    }
+    return new LongValues() {
+
+      @Override
+      public long get(long index) {
+        return slope * index + intersect;
+      }
+
+      @Override
+      public LongValues linearTransform(long factor, long yShift) {
+        return linear(factor * slope, factor * intersect + yShift);
+      }
+    };
+  }
+
+  public static LongValues linear(float slope, long intersect) {
+    if (slope == 0L) {
+      return constant(intersect);
+    }
+    return new LongValues() {
+
+      @Override
+      public long get(long index) {
+        return (long) (slope * index) + intersect;
+      }
+    };
+  }
 
   /** Get value at <code>index</code>. */
   public abstract long get(long index);
+
+  public final LongValues add(long value) {
+    if (value == 0) {
+      return this;
+    }
+    return linearTransform(1, value);
+  }
+
+  public LongValues linearTransform(long factor, long yShift) {
+    return linearTransform(this, factor, yShift);
+  }
+
+  private static LongValues linearTransform(LongValues values, long factor, long yShift) {
+    return new LongValues() {
+
+      @Override
+      public long get(long index) {
+        return values.get(index) * factor + yShift;
+      }
+
+      @Override
+      public LongValues linearTransform(long f, long s) {
+        return values.linearTransform(factor * f, f * yShift + s);
+      }
+    };
+  }
 }
