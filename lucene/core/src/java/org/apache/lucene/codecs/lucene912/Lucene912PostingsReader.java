@@ -259,12 +259,10 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       termState.singletonDocID += BitUtil.zigZagDecode(l >>> 1);
     }
 
-    if (fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0) {
+    IndexOptions indexOptions = fieldInfo.getIndexOptions();
+    if (indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) >= 0) {
       termState.posStartFP += in.readVLong();
-      if (fieldInfo
-                  .getIndexOptions()
-                  .compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS)
-              >= 0
+      if (indexOptions.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS_AND_OFFSETS) >= 0
           || fieldInfo.hasPayloads()) {
         termState.payStartFP += in.readVLong();
       }
@@ -512,6 +510,10 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     }
 
     private void skipLevel1To(int target) throws IOException {
+      var docIn = this.docIn;
+      int level1LastDocID = this.level1LastDocID;
+      final int docFreq = this.docFreq;
+      int level1DocCountUpto = this.level1DocCountUpto;
       while (true) {
         prevDocID = level1LastDocID;
         level0LastDocID = level1LastDocID;
@@ -519,7 +521,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         docCountUpto = level1DocCountUpto;
         level1DocCountUpto += LEVEL1_NUM_DOCS;
 
-        if (docFreq - docCountUpto < LEVEL1_NUM_DOCS) {
+        if (docFreq < level1DocCountUpto) {
           level1LastDocID = NO_MORE_DOCS;
           break;
         }
@@ -535,19 +537,25 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
           break;
         }
       }
+      this.level1DocCountUpto = level1DocCountUpto;
+      this.level1LastDocID = level1LastDocID;
     }
 
     private void skipLevel0To(int target) throws IOException {
+      int lvl0LastDocID = level0LastDocID;
+      final int docFreq = this.docFreq;
+      int docCountUpto = this.docCountUpto;
       while (true) {
-        prevDocID = level0LastDocID;
+        prevDocID = lvl0LastDocID;
         if (docFreq - docCountUpto >= BLOCK_SIZE) {
+          var docIn = this.docIn;
           long skip0NumBytes = docIn.readVLong();
           // end offset of skip data (before the actual data starts)
           long skip0EndFP = docIn.getFilePointer() + skip0NumBytes;
           int docDelta = readVInt15(docIn);
-          level0LastDocID += docDelta;
+          lvl0LastDocID += docDelta;
 
-          if (target <= level0LastDocID) {
+          if (target <= lvl0LastDocID) {
             docIn.seek(skip0EndFP);
             break;
           }
@@ -556,10 +564,12 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
           docIn.skipBytes(readVLong15(docIn));
           docCountUpto += BLOCK_SIZE;
         } else {
-          level0LastDocID = NO_MORE_DOCS;
+          lvl0LastDocID = NO_MORE_DOCS;
           break;
         }
       }
+      this.docCountUpto = docCountUpto;
+      level0LastDocID = lvl0LastDocID;
     }
 
     private void moveToNextLevel0Block() throws IOException {
@@ -795,6 +805,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     }
 
     private void skipLevel1To(int target) throws IOException {
+      var docIn = this.docIn;
       while (true) {
         prevDocID = level1LastDocID;
         level0LastDocID = level1LastDocID;
@@ -842,6 +853,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       prevDocID = level0LastDocID;
 
       assert docBufferUpto == BLOCK_SIZE;
+      var posIn = this.posIn;
       if (level0PosEndFP >= posIn.getFilePointer()) {
         posIn.seek(level0PosEndFP);
         posPendingCount = level0BlockPosUpto;
@@ -854,6 +866,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       }
 
       if (docFreq - docCountUpto >= BLOCK_SIZE) {
+        var docIn = this.docIn;
         docIn.readVLong(); // skip0 num bytes
         int docDelta = readVInt15(docIn);
         level0LastDocID += docDelta;
@@ -910,6 +923,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         }
 
         if (docFreq - docCountUpto >= BLOCK_SIZE) {
+          var docIn = this.docIn;
           docIn.readVLong(); // skip0 num bytes
           int docDelta = readVInt15(docIn);
           level0LastDocID += docDelta;
@@ -1313,6 +1327,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     }
 
     private void skipLevel1To(int target) throws IOException {
+      var docIn = this.docIn;
       while (true) {
         prevDocID = level1LastDocID;
         level0LastDocID = level1LastDocID;
@@ -1344,6 +1359,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       while (true) {
         prevDocID = level0LastDocID;
         if (docFreq - docCountUpto >= BLOCK_SIZE) {
+          var docIn = this.docIn;
           long skip0NumBytes = docIn.readVLong();
           // end offset of skip data (before the actual data starts)
           long skip0End = docIn.getFilePointer() + skip0NumBytes;
@@ -1435,6 +1451,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         needsRefilling = false;
       }
 
+      var docBuffer = this.docBuffer;
       int next = findFirstGreater(docBuffer, target, docBufferUpto);
       this.doc = (int) docBuffer[next];
       docBufferUpto = next + 1;
