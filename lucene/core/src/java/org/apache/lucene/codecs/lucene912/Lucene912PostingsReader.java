@@ -1610,6 +1610,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         }
 
         if (docFreq - docCountUpto >= BLOCK_SIZE) {
+          var docIn = this.docIn;
           docIn.readVLong(); // skip0 num bytes
           int docDelta = readVInt15(docIn);
           long blockLength = readVLong15(docIn);
@@ -1749,20 +1750,22 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     public int nextPosition() throws IOException {
       assert posPendingCount > 0;
 
+      long posPendingCount = this.posPendingCount;
       if (posPendingCount > freq) {
         skipPositions();
         posPendingCount = freq;
       }
 
+      int posBufferUpto = this.posBufferUpto;
       if (posBufferUpto == BLOCK_SIZE) {
         refillPositions();
         posBufferUpto = 0;
       }
-      position += posDeltaBuffer[posBufferUpto];
+      long newPos = position + posDeltaBuffer[posBufferUpto];
 
-      posBufferUpto++;
-      posPendingCount--;
-      return position;
+      this.posBufferUpto = posBufferUpto + 1;
+      this.posPendingCount = posPendingCount - 1;
+      return position = (int) newPos;
     }
   }
 
