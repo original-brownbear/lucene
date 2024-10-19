@@ -1581,9 +1581,9 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             if (target >= maxDoc) {
               return doc = NO_MORE_DOCS;
             }
-            curr = addresses.get(target);
-            long end = addresses.get(target + 1L);
-            count = (int) (end - curr);
+            long c = addresses.get(target);
+            count = (int) (addresses.get(target + 1L) - c);
+            curr = c;
             return doc = target;
           }
 
@@ -1723,7 +1723,6 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
     long block = -1;
     long delta;
-    long offset;
     long blockEndOffset;
     LongValues values;
 
@@ -1747,18 +1746,24 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
 
     long getLongValue(long index) throws IOException {
       final long block = index >>> shift;
-      if (this.block != block) {
+      long currentBlock = this.block;
+      final LongValues values;
+      if (currentBlock != block) {
+        long offset;
+        RandomAccessInput slice = this.slice;
+        long blockEndOffset = this.blockEndOffset;
         int bitsPerValue;
+        long deltaOffset;
         do {
           // If the needed block is the one directly following the current block, it is cheaper to
           // avoid the cache
-          if (rankSlice != null && block != this.block + 1) {
+          if (rankSlice != null && block != currentBlock + 1) {
             blockEndOffset = rankSlice.readLong(block * Long.BYTES) - entry.valuesOffset;
-            this.block = block - 1;
+            currentBlock = block - 1;
           }
           offset = blockEndOffset;
           bitsPerValue = slice.readByte(offset++);
-          delta = slice.readLong(offset);
+          deltaOffset = offset;
           offset += Long.BYTES;
           if (bitsPerValue == 0) {
             blockEndOffset = offset;
@@ -1767,14 +1772,22 @@ final class Lucene90DocValuesProducer extends DocValuesProducer {
             offset += Integer.BYTES;
             blockEndOffset = offset + length;
           }
-          this.block++;
-        } while (this.block != block);
-        final int numValues =
-            Math.toIntExact(Math.min(1 << shift, entry.numValues - (block << shift)));
+          currentBlock++;
+        } while (currentBlock != block);
+        this.block = currentBlock;
+        this.blockEndOffset = blockEndOffset;
+        delta = slice.readLong(deltaOffset);
         values =
             bitsPerValue == 0
                 ? LongValues.ZEROES
-                : getDirectReaderInstance(slice, bitsPerValue, offset, numValues);
+                : getDirectReaderInstance(
+                    slice,
+                    bitsPerValue,
+                    offset,
+                    Math.toIntExact(Math.min(1 << shift, entry.numValues - (block << shift))));
+        this.values = values;
+      } else {
+        values = this.values;
       }
       return mul * values.get(index & mask) + delta;
     }
