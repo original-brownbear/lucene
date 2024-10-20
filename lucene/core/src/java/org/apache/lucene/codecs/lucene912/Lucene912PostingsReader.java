@@ -280,13 +280,14 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
   public PostingsEnum postings(
       FieldInfo fieldInfo, BlockTermState termState, PostingsEnum reuse, int flags)
       throws IOException {
-    if (fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0
+    IndexOptions options = fieldInfo.getIndexOptions();
+    boolean indexHasFreq = options.compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
+    if (options.compareTo(IndexOptions.DOCS_AND_FREQS_AND_POSITIONS) < 0
         || PostingsEnum.featureRequested(flags, PostingsEnum.POSITIONS) == false) {
-      return (reuse instanceof BlockDocsEnum blockDocsEnum
-                  && blockDocsEnum.canReuse(docIn, fieldInfo)
+      return (reuse instanceof BlockDocsEnum blockDocsEnum && blockDocsEnum.canReuse(docIn)
               ? blockDocsEnum
-              : new BlockDocsEnum(fieldInfo))
-          .reset((IntBlockTermState) termState, flags);
+              : new BlockDocsEnum())
+          .reset((IntBlockTermState) termState, flags, indexHasFreq);
     } else {
       return (reuse instanceof EverythingEnum everythingEnum
                   && everythingEnum.canReuse(docIn, fieldInfo)
@@ -336,7 +337,6 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     protected PForUtil pforUtil;
 
     protected final long[] docBuffer = new long[BLOCK_SIZE + 1];
-    protected final boolean indexHasFreq;
 
     protected int doc; // doc we last read
 
@@ -362,8 +362,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     protected IndexInput docIn;
     protected PostingDecodingUtil docInUtil;
 
-    protected AbstractPostingsEnum(FieldInfo fieldInfo) {
-      indexHasFreq = fieldInfo.getIndexOptions().compareTo(IndexOptions.DOCS_AND_FREQS) >= 0;
+    protected AbstractPostingsEnum() {
       // We set the last element of docBuffer to NO_MORE_DOCS, it helps save conditionals in
       // advance()
       docBuffer[BLOCK_SIZE] = NO_MORE_DOCS;
@@ -411,20 +410,17 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
 
     private final long[] freqBuffer = new long[BLOCK_SIZE];
 
+    private boolean indexHasFreq;
     private boolean needsFreq; // true if the caller actually needs frequencies
     private long freqFP;
 
-    public BlockDocsEnum(FieldInfo fieldInfo) {
-      super(fieldInfo);
+    public boolean canReuse(IndexInput docIn) {
+      return docIn == Lucene912PostingsReader.this.docIn;
     }
 
-    public boolean canReuse(IndexInput docIn, FieldInfo fieldInfo) {
-      final IndexOptions options = fieldInfo.getIndexOptions();
-      return docIn == Lucene912PostingsReader.this.docIn
-          && indexHasFreq == (options.compareTo(IndexOptions.DOCS_AND_FREQS) >= 0);
-    }
-
-    public PostingsEnum reset(IntBlockTermState termState, int flags) throws IOException {
+    public PostingsEnum reset(IntBlockTermState termState, int flags, boolean indexHasFreq)
+        throws IOException {
+      this.indexHasFreq = indexHasFreq;
       resetIndexInput(termState);
       if (pforUtil == null && docFreq >= BLOCK_SIZE) {
         pforUtil = new PForUtil(new ForUtil());
@@ -670,8 +666,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     private boolean needsOffsets; // true if we actually need offsets
     private boolean needsPayloads; // true if we actually need payloads
 
-    public EverythingEnum(FieldInfo fieldInfo) throws IOException {
-      super(fieldInfo);
+    EverythingEnum(FieldInfo fieldInfo) throws IOException {
       indexHasOffsets =
           fieldInfo
                   .getIndexOptions()
@@ -784,7 +779,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
         docCountUpto++;
       } else {
         // Read vInts:
-        PostingsUtil.readVIntBlock(docIn, docBuffer, freqBuffer, left, indexHasFreq, true);
+        PostingsUtil.readVIntBlock(docIn, docBuffer, freqBuffer, left, true, true);
         prefixSum(docBuffer, left, prevDocID);
         docBuffer[left] = NO_MORE_DOCS;
         docCountUpto += left;
