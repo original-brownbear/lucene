@@ -126,14 +126,17 @@ class OrderedIntervalsSource extends MinimizingConjunctionIntervalsSource {
       boolean minimizing = false;
       final var subIterators = this.subIterators;
       int currentIndex = i;
+      int count = subIterators.size();
+      var first = subIterators.get(0);
+      var last = subIterators.get(count - 1);
+      int prevEnd = subIterators.get(currentIndex - 1).end();
       while (true) {
-        int prevEnd = subIterators.get(currentIndex - 1).end();
         while (true) {
           if (prevEnd >= lastStart) {
             i = currentIndex;
             return start;
           }
-          if (currentIndex == subIterators.size()) {
+          if (currentIndex == count) {
             break;
           }
           final IntervalIterator current = subIterators.get(currentIndex);
@@ -151,28 +154,26 @@ class OrderedIntervalsSource extends MinimizingConjunctionIntervalsSource {
           currentIndex++;
           prevEnd = current.end();
         }
-        var first = subIterators.get(0);
         final int start = first.start();
         this.start = start;
         if (start == NO_MORE_INTERVALS) {
           i = currentIndex;
           return end = NO_MORE_INTERVALS;
         }
-        var last = subIterators.getLast();
-
         final int end = last.end();
         this.end = end;
         int slop = end - start + 1;
-        for (int j = 0; j < subIterators.size(); j++) {
+        for (int j = 0; j < count; j++) {
           slop -= subIterators.get(j).width();
         }
         this.slop = slop;
         onMatch.onMatch();
-        currentIndex = 1;
         if (first.nextInterval() == IntervalIterator.NO_MORE_INTERVALS) {
-          i = currentIndex;
+          i = 1;
           return start;
         }
+        currentIndex = 1;
+        prevEnd = first.end();
         lastStart = last.start();
         minimizing = true;
       }
