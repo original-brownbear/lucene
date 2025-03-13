@@ -249,16 +249,16 @@ final class Lucene90NormsProducer extends NormsProducer implements Cloneable {
       slice = dataInputs.get(field.number);
     }
     if (slice == null) {
-      slice =
-          data.randomAccessSlice(
-              entry.normsOffset, entry.numDocsWithField * (long) entry.bytesPerNorm);
+      final long length = entry.numDocsWithField * (long) entry.bytesPerNorm;
+      final long offset = entry.normsOffset;
+      slice = data.randomAccessSlice(offset, length);
       if (merging) {
         dataInputs.put(field.number, slice);
       }
       // Prefetch the first page of data. Following pages are expected to get prefetched through
       // read-ahead.
-      if (slice.length() > 0) {
-        slice.prefetch(0, 1);
+      if (length > 0) {
+        data.prefetch(offset, 1);
       }
     }
     return slice;
