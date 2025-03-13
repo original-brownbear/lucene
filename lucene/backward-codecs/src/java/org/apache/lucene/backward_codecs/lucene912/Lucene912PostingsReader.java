@@ -1764,8 +1764,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
     return to;
   }
 
-  private static void prefetchPostings(IndexInput docIn, IntBlockTermState state)
-      throws IOException {
+  private void prefetchPostings(IndexInput docIn, IntBlockTermState state) throws IOException {
     assert state.docFreq > 1; // Singletons are inlined in the terms dict, nothing to prefetch
     if (docIn.getFilePointer() != state.docStartFP) {
       // Don't prefetch if the input is already positioned at the right offset, which suggests that
@@ -1773,7 +1772,7 @@ public final class Lucene912PostingsReader extends PostingsReaderBase {
       // logic do its work instead. Note that this heuristic doesn't work for terms that have skip
       // data, since skip data is stored after the last term, but handling all terms that have <128
       // docs is a good start already.
-      docIn.prefetch(state.docStartFP, 1);
+      Lucene912PostingsReader.this.docIn.prefetch(state.docStartFP, 1);
     }
     // Note: we don't prefetch positions or offsets, which are less likely to be needed.
   }
