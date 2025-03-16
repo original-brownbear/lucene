@@ -369,8 +369,12 @@ public abstract class PointValues {
               yield false;
             }
           }
-          while (pointTree.moveToSibling() && intersect(visitor, pointTree))
-            ;
+          while (pointTree.moveToSibling()) {
+            if (intersect(visitor, pointTree) == false) {
+              pointTree.moveToParent();
+              yield false;
+            }
+          }
           pointTree.moveToParent();
         } else {
           // TODO: we can assert that the first value here in fact matches what the pointTree
