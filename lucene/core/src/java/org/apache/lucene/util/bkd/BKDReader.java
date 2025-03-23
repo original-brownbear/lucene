@@ -19,7 +19,6 @@ package org.apache.lucene.util.bkd;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.Arrays;
-import java.util.Deque;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.PointValues;
@@ -451,6 +450,16 @@ public class BKDReader extends PointValues {
           splitValuesStack[level], splitDimPos, minPackedValue, splitDimPos, config.bytesPerDim());
     }
 
+    private void popAndPushRight() throws IOException {
+      final int nodePosition = rightNodePositions[this.level - 1];
+      assert nodePosition >= innerNodes.getFilePointer()
+          : "nodePosition = " + nodePosition + " < currentPosition=" + innerNodes.getFilePointer();
+      innerNodes.seek(nodePosition);
+      int nodeID = this.nodeID;
+      this.nodeID = ((nodeID >> 1) << 1) + 1;
+      readNodeData(false);
+    }
+
     private void pushRight() throws IOException {
       final int nodePosition = rightNodePositions[level];
       assert nodePosition >= innerNodes.getFilePointer()
@@ -590,7 +599,8 @@ public class BKDReader extends PointValues {
     }
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
-      final Deque<Boolean> stack = new ArrayDeque<>(rightNodePositions.length);
+      final ArrayDeque<Boolean> stack = new ArrayDeque<>(readNodeDataPositions.length + 1);
+      var leafNodes = this.leafNodes;
       do {
         if (isLeafNode()) {
           // Leaf node
@@ -608,16 +618,16 @@ public class BKDReader extends PointValues {
             pop();
             wasRight = stack.pollFirst();
           }
-          if (wasRight != null && wasRight == false) {
-            stack.push(true);
-            pop();
-            pushRight();
+          if (wasRight == null) {
+            return;
           }
+          popAndPushRight();
+          stack.push(true);
         } else {
           pushLeft();
           stack.push(false);
         }
-      } while (stack.isEmpty() == false);
+      } while (true);
     }
 
     @Override
