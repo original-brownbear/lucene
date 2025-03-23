@@ -454,8 +454,7 @@ public class BKDReader extends PointValues {
       assert nodePosition >= innerNodes.getFilePointer()
           : "nodePosition = " + nodePosition + " < currentPosition=" + innerNodes.getFilePointer();
       innerNodes.seek(nodePosition);
-      int nodeID = this.nodeID;
-      this.nodeID = ((nodeID >> 1) << 1) + 1;
+      this.nodeID = ((this.nodeID >> 1) << 1) + 1;
       readNodeData(false);
     }
 
@@ -599,7 +598,9 @@ public class BKDReader extends PointValues {
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
       int depth = 0;
+      var leafNodes = this.leafNodes;
       do {
+        int nodeID = this.nodeID;
         if (isLeafNode()) {
           // Leaf node
           leafNodes.seek(getLeafBlockFP());
@@ -608,23 +609,27 @@ public class BKDReader extends PointValues {
           // No need to call grow(), it has been called up-front
           // Borrow scratchIterator.docIds as decoding buffer
           docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
-          while (depth > 0 && isRightChild(nodeID)) {
-            pop();
-            depth--;
+          int popCount = 0;
+          while (depth > popCount && nodeID == ((nodeID >> 1) << 1) + 1) {
+            popCount++;
+            nodeID /= 2;
+          }
+          if (popCount > 0) {
+            this.nodeID = nodeID;
+            depth -= popCount;
+            level -= popCount;
           }
           if (depth == 0) {
             return;
           }
           popAndPushRight();
         } else {
-          pushLeft();
+          this.nodeID = nodeID << 1;
+          level++;
           depth++;
+          readNodeData(true);
         }
       } while (true);
-    }
-
-    private static boolean isRightChild(int nodeID) {
-      return nodeID == ((nodeID / 2) * 2 + 1);
     }
 
     @Override
