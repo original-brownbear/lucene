@@ -643,8 +643,7 @@ public class BKDReader extends PointValues {
       } else {
         pushLeft();
         visitLeavesOneByOne(visitor);
-        pop();
-        pushRight();
+        popAndPushRight();
         visitLeavesOneByOne(visitor);
         pop();
       }
