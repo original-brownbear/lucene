@@ -17,7 +17,9 @@
 package org.apache.lucene.util.bkd;
 
 import java.io.IOException;
+import java.util.ArrayDeque;
 import java.util.Arrays;
+import java.util.Deque;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.PointValues;
@@ -580,33 +582,42 @@ public class BKDReader extends PointValues {
     @Override
     public void visitDocIDs(PointValues.IntersectVisitor visitor) throws IOException {
       resetNodeDataPosition();
-      addAll(visitor, false);
+      final long size = size();
+      if (size <= Integer.MAX_VALUE) {
+        visitor.grow((int) size);
+      }
+      addAll(visitor);
     }
 
-    public void addAll(PointValues.IntersectVisitor visitor, boolean grown) throws IOException {
-      if (grown == false) {
-        final long size = size();
-        if (size <= Integer.MAX_VALUE) {
-          visitor.grow((int) size);
-          grown = true;
+    private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
+      final Deque<Boolean> stack = new ArrayDeque<>();
+      do {
+        if (isLeafNode()) {
+          // Leaf node
+          leafNodes.seek(getLeafBlockFP());
+          // How many points are stored in this leaf cell:
+          int count = leafNodes.readVInt();
+          // No need to call grow(), it has been called up-front
+          // Borrow scratchIterator.docIds as decoding buffer
+          docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
+          var wasRight = stack.pollFirst();
+          if (wasRight == null) {
+            return;
+          }
+          while (wasRight != null && wasRight) {
+            pop();
+            wasRight = stack.pollFirst();
+          }
+          if (wasRight != null && wasRight == false) {
+            stack.push(true);
+            pop();
+            pushRight();
+          }
+        } else {
+          pushLeft();
+          stack.push(false);
         }
-      }
-      if (isLeafNode()) {
-        // Leaf node
-        leafNodes.seek(getLeafBlockFP());
-        // How many points are stored in this leaf cell:
-        int count = leafNodes.readVInt();
-        // No need to call grow(), it has been called up-front
-        // Borrow scratchIterator.docIds as decoding buffer
-        docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
-      } else {
-        pushLeft();
-        addAll(visitor, grown);
-        pop();
-        pushRight();
-        addAll(visitor, grown);
-        pop();
-      }
+      } while (stack.isEmpty() == false);
     }
 
     @Override
