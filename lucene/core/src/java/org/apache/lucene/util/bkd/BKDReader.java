@@ -598,12 +598,13 @@ public class BKDReader extends PointValues {
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
       int depth = 0;
-      var leafNodes = this.leafNodes;
       do {
         int nodeID = this.nodeID;
+        int level = this.level;
         if (isLeafNode()) {
+          var leafNodes = this.leafNodes;
           // Leaf node
-          leafNodes.seek(getLeafBlockFP());
+          leafNodes.seek(leafBlockFPStack[level]);
           // How many points are stored in this leaf cell:
           int count = leafNodes.readVInt();
           // No need to call grow(), it has been called up-front
@@ -615,17 +616,22 @@ public class BKDReader extends PointValues {
             nodeID /= 2;
           }
           if (popCount > 0) {
-            this.nodeID = nodeID;
             depth -= popCount;
             level -= popCount;
+            this.level = level;
           }
           if (depth == 0) {
+            this.nodeID = nodeID;
             return;
+          } else {
+            final int nodePosition = rightNodePositions[level - 1];
+            innerNodes.seek(nodePosition);
+            this.nodeID = ((nodeID >> 1) << 1) + 1;
+            readNodeData(false);
           }
-          popAndPushRight();
         } else {
           this.nodeID = nodeID << 1;
-          level++;
+          this.level = level + 1;
           depth++;
           readNodeData(true);
         }
