@@ -449,15 +449,6 @@ public class BKDReader extends PointValues {
           splitValuesStack[level], splitDimPos, minPackedValue, splitDimPos, config.bytesPerDim());
     }
 
-    private void popAndPushRight() throws IOException {
-      final int nodePosition = rightNodePositions[this.level - 1];
-      assert nodePosition >= innerNodes.getFilePointer()
-          : "nodePosition = " + nodePosition + " < currentPosition=" + innerNodes.getFilePointer();
-      innerNodes.seek(nodePosition);
-      this.nodeID = ((this.nodeID >> 1) << 1) + 1;
-      readNodeData(false);
-    }
-
     private void pushRight() throws IOException {
       final int nodePosition = rightNodePositions[level];
       assert nodePosition >= innerNodes.getFilePointer()
@@ -598,44 +589,33 @@ public class BKDReader extends PointValues {
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
       int depth = 0;
-      int nodeID = this.nodeID;
-      int level = this.level;
-      do {
-        boolean isLeaf = nodeID >= leafNodeOffset;
-        if (isLeaf) {
-          var leafNodes = this.leafNodes;
-          // Leaf node
-          leafNodes.seek(leafBlockFPStack[level]);
-          // How many points are stored in this leaf cell:
-          int count = leafNodes.readVInt();
-          // No need to call grow(), it has been called up-front
-          // Borrow scratchIterator.docIds as decoding buffer
-          docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
-          int popCount = 0;
-          while (depth > popCount && nodeID == ((nodeID >> 1) << 1) + 1) {
-            popCount++;
-            nodeID /= 2;
-          }
-          if (popCount > 0) {
-            depth -= popCount;
-            level -= popCount;
-            this.level = level;
-          }
-          if (depth == 0) {
-            this.nodeID = nodeID;
-            return;
-          }
-          innerNodes.seek(rightNodePositions[level - 1]);
-          nodeID = ((nodeID >> 1) << 1) + 1;
-        } else {
-          nodeID = nodeID << 1;
+      while (true) {
+        while (isLeafNode() == false) {
+          pushLeft();
           depth++;
-          level++;
-          this.level = level;
         }
-        this.nodeID = nodeID;
-        readNodeData(isLeaf == false);
-      } while (true);
+        // Leaf node
+        leafNodes.seek(getLeafBlockFP());
+        // How many points are stored in this leaf cell:
+        int count = leafNodes.readVInt();
+        // No need to call grow(), it has been called up-front
+        // Borrow scratchIterator.docIds as decoding buffer
+        docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
+        while (depth > 0 && isOnRightChild()) {
+          pop();
+          depth--;
+        }
+        if (depth == 0) {
+          return;
+        }
+        pop();
+        pushRight();
+      }
+    }
+
+    private boolean isOnRightChild() {
+      int nodeID = this.nodeID;
+      return nodeID == ((nodeID >> 1) << 1) + 1;
     }
 
     @Override
@@ -651,7 +631,8 @@ public class BKDReader extends PointValues {
       } else {
         pushLeft();
         visitLeavesOneByOne(visitor);
-        popAndPushRight();
+        pop();
+        pushRight();
         visitLeavesOneByOne(visitor);
         pop();
       }
