@@ -590,7 +590,7 @@ public class BKDReader extends PointValues {
     }
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
-      final Deque<Boolean> stack = new ArrayDeque<>();
+      final Deque<Boolean> stack = new ArrayDeque<>(rightNodePositions.length);
       do {
         if (isLeafNode()) {
           // Leaf node
