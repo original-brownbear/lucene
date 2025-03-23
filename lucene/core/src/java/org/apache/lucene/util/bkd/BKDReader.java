@@ -17,7 +17,6 @@
 package org.apache.lucene.util.bkd;
 
 import java.io.IOException;
-import java.util.ArrayDeque;
 import java.util.Arrays;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.CorruptIndexException;
@@ -599,8 +598,7 @@ public class BKDReader extends PointValues {
     }
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
-      final ArrayDeque<Boolean> stack = new ArrayDeque<>(readNodeDataPositions.length + 1);
-      var leafNodes = this.leafNodes;
+      int depth = 0;
       do {
         if (isLeafNode()) {
           // Leaf node
@@ -610,24 +608,23 @@ public class BKDReader extends PointValues {
           // No need to call grow(), it has been called up-front
           // Borrow scratchIterator.docIds as decoding buffer
           docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
-          var wasRight = stack.pollFirst();
-          if (wasRight == null) {
-            return;
-          }
-          while (wasRight != null && wasRight) {
+          while (depth > 0 && isRightChild(nodeID)) {
             pop();
-            wasRight = stack.pollFirst();
+            depth--;
           }
-          if (wasRight == null) {
+          if (depth == 0) {
             return;
           }
           popAndPushRight();
-          stack.push(true);
         } else {
           pushLeft();
-          stack.push(false);
+          depth++;
         }
       } while (true);
+    }
+
+    private static boolean isRightChild(int nodeID) {
+      return nodeID == ((nodeID / 2) * 2 + 1);
     }
 
     @Override
