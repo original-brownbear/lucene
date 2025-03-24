@@ -590,6 +590,7 @@ public class BKDReader extends PointValues {
       int depth = 0;
       do {
         depth = moveToFirstLeafInSubtree(depth);
+        var leafNodes = this.leafNodes;
         // Leaf node
         leafNodes.seek(getLeafBlockFP());
         // How many points are stored in this leaf cell:
@@ -606,17 +607,18 @@ public class BKDReader extends PointValues {
       int level = this.level;
       while (depth > 0 && isOnRightChild(nodeID)) {
         nodeID /= 2;
-        this.nodeID = nodeID;
         level--;
-        this.level = level;
         depth--;
       }
+      this.level = level;
       if (depth > 0) {
         final int nodePosition = rightNodePositions[level - 1];
         assert assertRightNodePosition(nodePosition);
         innerNodes.seek(nodePosition);
         this.nodeID = 2 * (nodeID / 2) + 1;
         readNodeData(false);
+      } else {
+        this.nodeID = nodeID;
       }
       return depth;
     }
