@@ -588,12 +588,8 @@ public class BKDReader extends PointValues {
     }
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
-      int depth = 0;
-      while (true) {
-        while (isLeafNode() == false) {
-          pushLeft();
-          depth++;
-        }
+      int depth = moveToFirstLeafInSubtree(0);
+      do {
         // Leaf node
         leafNodes.seek(getLeafBlockFP());
         // How many points are stored in this leaf cell:
@@ -601,21 +597,34 @@ public class BKDReader extends PointValues {
         // No need to call grow(), it has been called up-front
         // Borrow scratchIterator.docIds as decoding buffer
         docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
-        while (depth > 0 && isOnRightChild()) {
-          pop();
-          depth--;
-        }
-        if (depth == 0) {
-          return;
-        }
+        depth = moveToNextNode(depth);
+      } while (depth > 0);
+    }
+
+    private int moveToNextNode(int depth) throws IOException {
+      while (depth > 0 && isOnRightChild()) {
+        pop();
+        depth--;
+      }
+      if (depth > 0) {
         pop();
         pushRight();
+        depth = moveToFirstLeafInSubtree(depth);
       }
+      return depth;
     }
 
     private boolean isOnRightChild() {
       int nodeID = this.nodeID;
       return nodeID == ((nodeID >> 1) << 1) + 1;
+    }
+
+    private int moveToFirstLeafInSubtree(int depth) throws IOException {
+      while (isLeafNode() == false) {
+        pushLeft();
+        depth++;
+      }
+      return depth;
     }
 
     @Override
