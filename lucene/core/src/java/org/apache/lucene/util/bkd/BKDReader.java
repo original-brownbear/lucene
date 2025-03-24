@@ -602,16 +602,20 @@ public class BKDReader extends PointValues {
     }
 
     private int moveToNextSubtree(int depth) throws IOException {
-      while (depth > 0 && isOnRightChild()) {
+      int nodeID = this.nodeID;
+      int level = this.level;
+      while (depth > 0 && isOnRightChild(nodeID)) {
         nodeID /= 2;
+        this.nodeID = nodeID;
         level--;
+        this.level = level;
         depth--;
       }
       if (depth > 0) {
         final int nodePosition = rightNodePositions[level - 1];
         assert assertRightNodePosition(nodePosition);
         innerNodes.seek(nodePosition);
-        nodeID = 2 * (nodeID / 2) + 1;
+        this.nodeID = 2 * (nodeID / 2) + 1;
         readNodeData(false);
       }
       return depth;
@@ -623,8 +627,7 @@ public class BKDReader extends PointValues {
       return true;
     }
 
-    private boolean isOnRightChild() {
-      int nodeID = this.nodeID;
+    private static boolean isOnRightChild(int nodeID) {
       return nodeID == ((nodeID >> 1) << 1) + 1;
     }
 
