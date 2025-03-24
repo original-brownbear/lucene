@@ -590,9 +590,9 @@ public class BKDReader extends PointValues {
       int depth = 0;
       var leafNodes = this.leafNodes;
       final int leafNodeOffset = this.leafNodeOffset;
-      do {
-        int nodeID = this.nodeID;
-        int level = this.level;
+      int nodeID = this.nodeID;
+      int level = this.level;
+      while (true) {
         while (nodeID < leafNodeOffset) {
           nodeID <<= 1;
           this.nodeID = nodeID;
@@ -614,16 +614,17 @@ public class BKDReader extends PointValues {
           depth--;
         }
         this.level = level;
-        if (depth > 0) {
-          final int nodePosition = rightNodePositions[level - 1];
-          assert assertRightNodePosition(nodePosition);
-          innerNodes.seek(nodePosition);
-          this.nodeID = 2 * (nodeID / 2) + 1;
-          readNodeData(false);
-        } else {
+        if (depth == 0) {
           this.nodeID = nodeID;
+          return;
         }
-      } while (depth > 0);
+        final int nodePosition = rightNodePositions[level - 1];
+        assert assertRightNodePosition(nodePosition);
+        innerNodes.seek(nodePosition);
+        nodeID = ((nodeID >> 1) << 1) + 1;
+        this.nodeID = nodeID;
+        readNodeData(false);
+      }
     }
 
     private boolean assertRightNodePosition(int nodePosition) {
