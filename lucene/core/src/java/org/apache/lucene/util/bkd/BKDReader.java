@@ -451,8 +451,7 @@ public class BKDReader extends PointValues {
 
     private void pushRight() throws IOException {
       final int nodePosition = rightNodePositions[level];
-      assert nodePosition >= innerNodes.getFilePointer()
-          : "nodePosition = " + nodePosition + " < currentPosition=" + innerNodes.getFilePointer();
+      assert assertRightNodePosition(nodePosition);
       innerNodes.seek(nodePosition);
       nodeID = 2 * nodeID + 1;
       level++;
@@ -588,8 +587,9 @@ public class BKDReader extends PointValues {
     }
 
     private void addAll(PointValues.IntersectVisitor visitor) throws IOException {
-      int depth = moveToFirstLeafInSubtree(0);
+      int depth = 0;
       do {
+        depth = moveToFirstLeafInSubtree(depth);
         // Leaf node
         leafNodes.seek(getLeafBlockFP());
         // How many points are stored in this leaf cell:
@@ -597,21 +597,30 @@ public class BKDReader extends PointValues {
         // No need to call grow(), it has been called up-front
         // Borrow scratchIterator.docIds as decoding buffer
         docIdsWriter.readInts(leafNodes, count, visitor, scratchIterator.docIDs);
-        depth = moveToNextNode(depth);
+        depth = moveToNextSubtree(depth);
       } while (depth > 0);
     }
 
-    private int moveToNextNode(int depth) throws IOException {
+    private int moveToNextSubtree(int depth) throws IOException {
       while (depth > 0 && isOnRightChild()) {
-        pop();
+        nodeID /= 2;
+        level--;
         depth--;
       }
       if (depth > 0) {
-        pop();
-        pushRight();
-        depth = moveToFirstLeafInSubtree(depth);
+        final int nodePosition = rightNodePositions[level - 1];
+        assert assertRightNodePosition(nodePosition);
+        innerNodes.seek(nodePosition);
+        nodeID = 2 * (nodeID / 2) + 1;
+        readNodeData(false);
       }
       return depth;
+    }
+
+    private boolean assertRightNodePosition(int nodePosition) {
+      assert nodePosition >= innerNodes.getFilePointer()
+          : "nodePosition = " + nodePosition + " < currentPosition=" + innerNodes.getFilePointer();
+      return true;
     }
 
     private boolean isOnRightChild() {
@@ -620,8 +629,10 @@ public class BKDReader extends PointValues {
     }
 
     private int moveToFirstLeafInSubtree(int depth) throws IOException {
-      while (isLeafNode() == false) {
-        pushLeft();
+      while (nodeID < leafNodeOffset) {
+        nodeID *= 2;
+        level++;
+        readNodeData(true);
         depth++;
       }
       return depth;
